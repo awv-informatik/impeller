@@ -1,9 +1,8 @@
 // impeller.parts: the shop from the film, for real. The page is the film's (the nav, the headline,
 // the part, the configurator, the footer); the part is the real model, rebuilt by ClassCAD in the
 // page at every change.
-import { useEffect } from 'react'
-import { useBuerliCadFacade } from '@buerli.io/react'
-import { boot } from './engine'
+import { useEffect, useState } from 'react'
+import { Session } from './Session'
 import { useShop } from './store'
 import { Nav } from './ui/Nav'
 import { Hero } from './ui/Hero'
@@ -12,23 +11,19 @@ import { Stage } from './ui/Stage'
 import { Cart } from './ui/Cart'
 import { GitHub, REPO } from './ui/GitHub'
 
-// the CAD session: one drawing, the model loaded into it once
-function Engine() {
-  const { api, facade } = useBuerliCadFacade('impeller')
-  useEffect(() => {
-    boot(api, facade)
-  }, [api, facade])
-  return null
-}
-
 export function App() {
   const cartOpen = useShop(s => s.cartOpen)
+  // (while developing: window.resession() replaces the CAD session, as a hot reload can)
+  const [session, setSession] = useState(0)
+  useEffect(() => {
+    if (import.meta.env.DEV) window.resession = () => setSession(n => n + 1)
+  }, [])
   useEffect(() => {
     document.body.style.overflow = cartOpen ? 'hidden' : ''
   }, [cartOpen])
   return (
     <div className="page">
-      <Engine />
+      <Session key={session} />
       <Nav />
       <main className="main">
         <Hero />

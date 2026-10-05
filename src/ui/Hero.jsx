@@ -1,7 +1,8 @@
 // The headline: three lines down the left on a wide screen, a banner across the top on narrower
 // ones. While a hand is on the controls, on a wide screen, it steps aside for what is being changed.
 import { useShop } from '../store'
-import { Giant, useTouched } from './Giant'
+import { Giant } from './Giant'
+import { useTouched } from './touched'
 
 export function Hero() {
   const want = useShop(s => s.want)

@@ -5,19 +5,6 @@ import { useEffect, useState } from 'react'
 import { useShop } from '../store'
 import { finishOf } from '../design'
 
-export function useTouched(ms = 1500) {
-  const touch = useShop(s => s.touch)
-  const sketchOpen = useShop(s => s.sketchOpen)
-  const [on, setOn] = useState(false)
-  useEffect(() => {
-    if (!touch) return
-    setOn(true)
-    const t = setTimeout(() => setOn(false), ms)
-    return () => clearTimeout(t)
-  }, [touch, ms])
-  return on && !sketchOpen ? touch.key : null
-}
-
 export function Giant({ k }) {
   const want = useShop(s => s.want)
   const finish = useShop(s => s.finish)

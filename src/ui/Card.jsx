@@ -37,7 +37,9 @@ function Row({ k, name, value, children, className = '' }) {
   )
 }
 
-function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label }) {
+// a slider. `lo`: below it the configuration does not go (the track is candy-striped there);
+// `building`: the engine is still building this value (the fill's stripes run)
+function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label, building }) {
   const ref = useRef()
   const k = (value - min) / (max - min)
   const set = (v, drag = false) => {
@@ -51,7 +53,7 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
   return (
     <div
       ref={ref}
-      className={'track' + (disabled ? ' off' : '')}
+      className={'track' + (disabled ? ' off' : '') + (building ? ' building' : '')}
       role="slider"
       tabIndex={disabled ? -1 : 0}
       aria-label={label}
@@ -71,7 +73,7 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
         else return
         e.preventDefault()
       }}>
-      {lo > min && <i className="lo" style={{ width: `${((lo - min) / (max - min)) * 100}%` }} title="Too small for these vanes" />}
+      {lo > min && <i className="lo" style={{ width: `${((lo - min) / (max - min)) * 100}%` }} title="Too small for these vanes and this curve" />}
       <i className="fill" style={{ width: `${k * 100}%` }} />
       <b className="knob" style={{ left: `${k * 100}%` }} />
     </div>
@@ -132,6 +134,7 @@ export function Card() {
   const busy = useShop(s => s.busy)
   const finish = useShop(s => s.finish)
   const volume = useShop(s => s.volume)
+  const solved = useShop(s => s.solved)
   const sketchOpen = useShop(s => s.sketchOpen)
   const error = useShop(s => s.error)
   const ready = status === 'ready'
@@ -157,7 +160,7 @@ export function Card() {
         <small>{!ready ? (status === 'error' ? 'offline' : 'starting') : busy ? 'rebuilding' : 'live'}</small>
       </div>
       <Row k="diameter" name="Diameter" value={<><b>Ø {want.diameter}</b> mm</>} className="r-slider">
-        <Slider label="Diameter" value={want.diameter} min={RANGE.diameter[0]} max={RANGE.diameter[1]} lo={lo} disabled={!ready} onChange={(v, drag) => change('diameter', v, !drag)} />
+        <Slider label="Diameter" value={want.diameter} min={RANGE.diameter[0]} max={RANGE.diameter[1]} lo={lo} disabled={!ready} building={busy && solved?.diameter !== want.diameter} onChange={(v, drag) => change('diameter', v, !drag)} />
       </Row>
       <Row k="vanes" name="Vanes" value={<b>{want.vanes}</b>} className="r-vanes">
         <div className="stepper">
@@ -172,7 +175,7 @@ export function Card() {
         </div>
       </Row>
       <Row k="vaneHeight" name="Vane height" value={<><b>{want.vaneHeight}</b> mm</>} className="r-slider">
-        <Slider label="Vane height" value={want.vaneHeight} min={RANGE.vaneHeight[0]} max={RANGE.vaneHeight[1]} disabled={!ready} onChange={(v, drag) => change('vaneHeight', v, !drag)} />
+        <Slider label="Vane height" value={want.vaneHeight} min={RANGE.vaneHeight[0]} max={RANGE.vaneHeight[1]} disabled={!ready} building={busy && solved?.vaneHeight !== want.vaneHeight} onChange={(v, drag) => change('vaneHeight', v, !drag)} />
       </Row>
       <Row k="bore" name="Bore" value={<><b>Ø {want.bore}</b> mm</>} className="r-bore">
         <div className="chips">

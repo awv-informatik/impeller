@@ -170,7 +170,10 @@ i.cube { width: 18px; height: 18px; flex: none; display: inline-block; backgroun
 .crow .track { position: absolute; left: 0; right: 0; top: calc(var(--ctl) + 12px); height: 6px; border-radius: 3px; background: #eceef2; cursor: pointer; touch-action: none; outline: none; }
 .crow .track::before { content: ''; position: absolute; left: -8px; right: -8px; top: -16px; bottom: -16px; }
 .crow .track .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
-.crow .track .lo { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: repeating-linear-gradient(135deg, #d9dce3 0 3px, transparent 3px 6px); z-index: 1; }
+.crow .track .lo { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0 3px, transparent 3px 7px); z-index: 1; }
+/* while the engine is still building this slider's value, the fill's stripes run */
+.crow .track.building .fill { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0 4px, transparent 4px 9px); animation: candy 0.45s linear infinite; }
+@keyframes candy { from { background-position: 0 0; } to { background-position: 12.728px 0; } }
 .crow .track .knob { position: absolute; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2.5px var(--accent), 0 4px 10px rgba(15, 19, 32, 0.25); z-index: 2; transition: transform 0.15s; }
 .crow .track:focus-visible .knob, .crow .track:active .knob { transform: scale(1.12); }
 .crow .track.off { cursor: default; }

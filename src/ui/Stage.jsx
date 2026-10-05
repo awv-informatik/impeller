@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShop } from '../store'
 import { BASE, T, design, middle } from '../design'
-import { Giant, useTouched } from './Giant'
+import { Giant } from './Giant'
+import { useTouched } from './touched'
 import { View } from '../three/View'
 import { Sketch } from './Sketch'
 
