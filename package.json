@@ -1,0 +1,27 @@
+{
+  "name": "impeller",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "impeller.parts: the shop from Part to parcel., for real. A pump impeller configured live on its parametric ClassCAD model (impeller.ofb) running in the browser with buerli.io",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@buerli.io/classcad": "1.2.0",
+    "@buerli.io/react": "1.2.0",
+    "@react-three/drei": "^9.117.3",
+    "@react-three/fiber": "^8.17.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.170.0",
+    "three-stdlib": "^2.34.0",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
