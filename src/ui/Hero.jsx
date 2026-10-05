@@ -25,7 +25,7 @@ export function Hero() {
             </h1>
           ))}
         </div>
-        <p className="sub">Every number is yours, and so is the curve of its vanes. Machined from your own model, in your mailbox within the week.</p>
+        <p className="sub">Choose the size, the number of vanes and the bore, then drag the vanes into whatever curve you like. We mill exactly that part and post it to you.</p>
         <div className="spec">
           {specs.map(([v, k]) => (
             <div key={k}>

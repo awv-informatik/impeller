@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShop } from '../store'
+import { GitHub, REPO } from './GitHub'
 
 export function Nav() {
   const count = useShop(s => s.cart.reduce((a, i) => a + i.qty, 0))
@@ -28,6 +29,9 @@ export function Nav() {
         <span title="Soon">Shipping</span>
         <span title="Soon">Contact</span>
       </div>
+      <a className="repo" href={REPO} target="_blank" rel="noreferrer" aria-label="The source on GitHub" title="The source on GitHub">
+        <GitHub />
+      </a>
       <button className={'cart' + (hop ? ' hop' : '')} onClick={() => openCart(true)}>
         <span>Cart</span>
         <b>{count}</b>

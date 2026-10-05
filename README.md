@@ -81,9 +81,11 @@ The price is the film's: CHF 24 + 0.95 per cm³ of the part + 14 for a coloured 
 
 ## How it is built
 
-- `src/engine.js`: the CAD session. It loads the OFB, queues changes (while the engine rebuilds,
-  only the latest change waits), and reads back what the engine built: the current solid's faces
-  and edges, the volume, and the vane sketch's solved geometry.
+- `src/engine.js`: the CAD session. It loads the OFB and reads back what the engine built: the
+  current solid's faces and edges, the volume, and the vane sketch's solved geometry. It also
+  paces the changes. A click goes to the engine at once. A drag goes 70 ms after it starts, and
+  after that as fast as the engine rebuilds, always with the latest value: a slider swept across
+  its whole track is a handful of rebuilds, not a hundred.
 - `src/three/`: the part in the film's look (`body.js` builds the geometry, edges and silhouette
   candidates from the engine's graphic; `Part.jsx` draws them; `View.jsx` is the turning view).
 - `src/ui/`: the page: `Hero` (with the giant readout of what is being changed), `Card` (the

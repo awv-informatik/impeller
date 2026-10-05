@@ -27,10 +27,23 @@ void main() {
   #include <colorspace_fragment>
 }`
 
+// The ink. An edge lies exactly on the faces it bounds, and the faces are flat facets of the true
+// curve the edge follows: where they meet, the faces would cover part of the line's width and leave
+// it ragged, thick in one place and thin in the next. So every line is drawn a hair nearer the eye
+// than it is (its ends pulled toward the camera along their own rays: on screen nothing moves).
+function inkMaterial() {
+  const m = new LineMaterial({ color: INK, linewidth: 1.6, transparent: true, depthWrite: false })
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader.replace('vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );', 'vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );\n\t\t\tstart.xyz *= 0.9975;\n\t\t\tend.xyz *= 0.9975;')
+  }
+  m.customProgramCacheKey = () => 'ink'
+  return m
+}
+
 export function Part({ body, color, width = 1.6 }) {
   const { size, viewport, camera } = useThree()
-  const mat = useMemo(() => new THREE.ShaderMaterial({ uniforms: { uBase: { value: new THREE.Color(color) } }, vertexShader: vert, fragmentShader: frag, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), [])
-  const lineMat = useMemo(() => new LineMaterial({ color: INK, linewidth: 1.6, transparent: true, depthWrite: false }), [])
+  const mat = useMemo(() => new THREE.ShaderMaterial({ uniforms: { uBase: { value: new THREE.Color(color) } }, vertexShader: vert, fragmentShader: frag, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2 }), [])
+  const lineMat = useMemo(() => inkMaterial(), [])
   const edges = useMemo(() => { const l = new LineSegments2(new LineSegmentsGeometry(), lineMat); l.frustumCulled = false; l.renderOrder = 2; return l }, [lineMat])
   const sil = useMemo(() => { const l = new LineSegments2(new LineSegmentsGeometry(), lineMat); l.frustumCulled = false; l.renderOrder = 2; return l }, [lineMat])
   const group = useRef()

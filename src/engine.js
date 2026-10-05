@@ -37,7 +37,7 @@ export async function boot(cadApi, cadFacade) {
     // the model's own parameters are where the controls start
     const solved = {}
     for (const name of PARAMS) solved[name] = (await api.part.getExpression({ id: part, name })).value
-    set({ note: 'Reading the part' })
+    set({ note: 'Building the part' })
     const r = await read(true)
     r.sketch = stamp(r.sketch, solved)
     set({ status: 'ready', want: solved, solved, ...r })
@@ -49,11 +49,26 @@ export async function boot(cadApi, cadFacade) {
   }
 }
 
-// a wish: the controls' configuration. The engine catches up with the latest one.
-export function request(want) {
+// a wish: the controls' configuration. The engine catches up with the latest one. A click goes at
+// once (`now`); a drag waits a moment (QUICK ms from its first move, however many follow) so that a
+// slider swept across its track is a handful of rebuilds, not a hundred.
+const QUICK = 70
+let timer = null
+export function request(want, { now = false } = {}) {
   next = want
-  if (useShop.getState().status === 'ready' && !running) run()
+  if (useShop.getState().status !== 'ready' || running) return
+  if (now) {
+    clearTimeout(timer)
+    timer = null
+    run()
+  } else if (!timer) {
+    timer = setTimeout(() => {
+      timer = null
+      if (!running && next) run()
+    }, QUICK)
+  }
 }
+const pause = ms => new Promise(r => setTimeout(r, ms))
 
 async function run() {
   running = true
@@ -74,6 +89,8 @@ async function run() {
       console.error(e)
       set({ want: { ...solved }, error: `ClassCAD couldn't build that one: ${e?.message ?? e}` })
     }
+    // (while a hand is still moving, a breath between rebuilds, for the latest wish to arrive)
+    if (next) await pause(QUICK / 2)
   }
   running = false
   set({ busy: false })

@@ -6,10 +6,11 @@ import { useShop } from '../store'
 import { request } from '../engine'
 import { BORES, FINISHES, PARAMS, RANGE, chf, finishOf, maxVanes, minDiameter, priceOf, sound } from '../design'
 
-const change = (key, value) => {
+// a control's change: a click goes to the engine at once, a drag after a moment
+const change = (key, value, now = true) => {
   const want = { ...useShop.getState().want, [key]: value }
   useShop.setState({ want, touch: { key, at: performance.now() } })
-  request(want)
+  request(want, { now })
 }
 
 // a row is red for a moment after it was changed
@@ -39,13 +40,13 @@ function Row({ k, name, value, children, className = '' }) {
 function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label }) {
   const ref = useRef()
   const k = (value - min) / (max - min)
-  const set = v => {
+  const set = (v, drag = false) => {
     v = Math.max(lo, Math.min(max, Math.round(v / step) * step))
-    if (v !== value) onChange(v)
+    if (v !== value) onChange(v, drag)
   }
-  const from = e => {
+  const from = (e, drag) => {
     const r = ref.current.getBoundingClientRect()
-    set(min + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (max - min))
+    set(min + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (max - min), drag)
   }
   return (
     <div
@@ -60,9 +61,9 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
       onPointerDown={e => {
         if (disabled) return
         e.currentTarget.setPointerCapture(e.pointerId)
-        from(e)
+        from(e, true)
       }}
-      onPointerMove={e => e.currentTarget.hasPointerCapture(e.pointerId) && from(e)}
+      onPointerMove={e => e.currentTarget.hasPointerCapture(e.pointerId) && from(e, true)}
       onKeyDown={e => {
         const d = (e.shiftKey ? 10 : 1) * step
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') set(value + d)
@@ -156,7 +157,7 @@ export function Card() {
         <small>{!ready ? (status === 'error' ? 'offline' : 'starting') : busy ? 'rebuilding' : 'live'}</small>
       </div>
       <Row k="diameter" name="Diameter" value={<><b>Ø {want.diameter}</b> mm</>} className="r-slider">
-        <Slider label="Diameter" value={want.diameter} min={RANGE.diameter[0]} max={RANGE.diameter[1]} lo={lo} disabled={!ready} onChange={v => change('diameter', v)} />
+        <Slider label="Diameter" value={want.diameter} min={RANGE.diameter[0]} max={RANGE.diameter[1]} lo={lo} disabled={!ready} onChange={(v, drag) => change('diameter', v, !drag)} />
       </Row>
       <Row k="vanes" name="Vanes" value={<b>{want.vanes}</b>} className="r-vanes">
         <div className="stepper">
@@ -171,7 +172,7 @@ export function Card() {
         </div>
       </Row>
       <Row k="vaneHeight" name="Vane height" value={<><b>{want.vaneHeight}</b> mm</>} className="r-slider">
-        <Slider label="Vane height" value={want.vaneHeight} min={RANGE.vaneHeight[0]} max={RANGE.vaneHeight[1]} disabled={!ready} onChange={v => change('vaneHeight', v)} />
+        <Slider label="Vane height" value={want.vaneHeight} min={RANGE.vaneHeight[0]} max={RANGE.vaneHeight[1]} disabled={!ready} onChange={(v, drag) => change('vaneHeight', v, !drag)} />
       </Row>
       <Row k="bore" name="Bore" value={<><b>Ø {want.bore}</b> mm</>} className="r-bore">
         <div className="chips">
@@ -200,7 +201,7 @@ export function Card() {
       <div className="buybar">
         <div className={'price' + (busy ? ' pending' : '') + (priceHot ? ' hot' : '')}>
           <span className="cur">CHF</span>
-          <b>{price != null ? chf(price) : '—'}</b>
+          {price != null ? <b>{chf(price)}</b> : <b className="skel" aria-label="The price, once the part is built" />}
           <small>incl. machining, ships in 3 days</small>
         </div>
         <Order />

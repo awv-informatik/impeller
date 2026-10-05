@@ -10,6 +10,7 @@ import { Hero } from './ui/Hero'
 import { Card } from './ui/Card'
 import { Stage } from './ui/Stage'
 import { Cart } from './ui/Cart'
+import { GitHub, REPO } from './ui/GitHub'
 
 // the CAD session: one drawing, the model loaded into it once
 function Engine() {
@@ -37,11 +38,21 @@ export function App() {
         </div>
       </main>
       <footer className="foot">
-        <span>
+        <span className="ofb">
           <i className="cube" />
           impeller.ofb · 6 parameters · 1 sketch curve
         </span>
-        <span>Rebuilt live by ClassCAD, in your browser</span>
+        <span className="made">
+          Rebuilt live by{' '}
+          <a href="https://classcad.ch" target="_blank" rel="noreferrer">
+            ClassCAD
+          </a>
+          , in your browser
+        </span>
+        <a className="gh" href={REPO} target="_blank" rel="noreferrer">
+          <GitHub />
+          Source on GitHub
+        </a>
       </footer>
       <Cart />
     </div>

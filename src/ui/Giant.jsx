@@ -25,18 +25,27 @@ export function Giant({ k }) {
   useEffect(() => {
     if (k) setLast(k)
   }, [k])
+  // [what it is, the sign before the number, the number, what it is counted in]
   const say = {
-    diameter: ['Diameter', <><s>Ø</s>{want.diameter}</>],
-    vanes: ['Vanes', <><s>×</s>{want.vanes}</>],
-    vaneHeight: ['Vane height', <>{want.vaneHeight}<s>mm</s></>],
-    bore: ['Bore', <><s>Ø</s>{want.bore}</>],
-    finish: ['Finish', <s className="r">{finishOf(finish).label}</s>],
+    diameter: ['Diameter', 'Ø', want.diameter, 'mm'],
+    vanes: ['Vanes', '×', want.vanes, want.vanes === 1 ? 'vane' : 'vanes'],
+    vaneHeight: ['Vane height', null, want.vaneHeight, 'mm'],
+    bore: ['Bore', 'Ø', want.bore, 'mm'],
+    finish: ['Finish', null, finishOf(finish).label, 'anodized'],
   }[k ?? last]
   if (!say) return null
+  const [label, sign, value, unit] = say
   return (
-    <div className={'giant' + (k ? ' on' : '')} aria-hidden>
-      <div className="gl">{say[0]}</div>
-      <div className="gn">{say[1]}</div>
+    <div className={'giant' + (k ? ' on' : '') + (typeof value === 'string' ? ' word' : '')} aria-hidden>
+      <div className="gl">
+        <i />
+        {label}
+      </div>
+      <div className="gn">
+        {sign && <s>{sign}</s>}
+        <span>{value}</span>
+        <u>{unit}</u>
+      </div>
     </div>
   )
 }

@@ -11,7 +11,7 @@ const change = patch => {
   const want = { ...useShop.getState().want, ...patch }
   if (!sound(want)) return false
   useShop.setState({ want, touch: { key: Object.keys(patch)[0], at: performance.now() } })
-  request(want)
+  request(want, { now: false })
   return true
 }
 const rot = ([x, y], a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]
