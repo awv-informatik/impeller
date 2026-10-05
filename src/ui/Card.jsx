@@ -195,7 +195,7 @@ export function Card() {
       <Row k="finish" name="Finish" value={<><b>{f.label}</b> anodized</>} className="r-finish">
         <div className="swatches">
           {FINISHES.map(x => (
-            <button key={x.key} className={'sw' + (x.key === finish ? ' on' : '')} onClick={() => useShop.getState().setFinish(x.key)} aria-label={x.label}>
+            <button key={x.key} className={'sw' + (x.key === finish ? ' on' : '')} onClick={() => useShop.getState().setFinish(x.key)} aria-label={x.word} title={x.word}>
               <i style={{ background: x.swatch }} />
             </button>
           ))}

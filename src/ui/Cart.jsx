@@ -70,7 +70,7 @@ export function Cart() {
                     Ø{i.config.diameter} · {i.config.vanes} vanes · {i.config.vaneHeight} high
                   </span>
                   <span>
-                    bore {i.config.bore} · swept {Math.round(i.config.wrap)}° · {finishOf(i.finish).label.toLowerCase()} anodized
+                    bore {i.config.bore} · swept {Math.round(i.config.wrap)}° · {finishOf(i.finish).word} anodized
                   </span>
                   <div className="qty">
                     <button onClick={() => setQty(i.key, i.qty - 1)} aria-label="One less">

@@ -12,14 +12,16 @@ export const PARAMS = ['diameter', 'vanes', 'vaneHeight', 'bore', 'wrap', 'bow']
 export const RANGE = { diameter: [80, 200], vanes: [3, 12], vaneHeight: [16, 48], wrap: [30, 120], bow: [0.04, 0.45] }
 export const BORES = [12, 16, 20, 25]
 
-// the finishes, as the part is drawn in each (and as its swatch shows it)
+// the finishes, as the part is drawn in each (and as its swatch shows it); `word`, as a sentence says it
 export const FINISHES = [
-  { key: 'raw', label: 'Raw', color: '#c9ced6', swatch: '#b9bec7' },
-  { key: 'black', label: 'Black', color: '#4b4f58', swatch: '#2a2c31' },
-  { key: 'red', label: 'Red', color: '#d8434b', swatch: '#c8141e' },
-  { key: 'blue', label: 'Blue', color: '#4472d4', swatch: '#2a5fb0' },
+  { key: 'raw', label: 'Raw', word: 'raw', color: '#c9ced6', swatch: '#b9bec7' },
+  { key: 'black', label: 'Black', word: 'black', color: '#4b4f58', swatch: '#2a2c31' },
+  { key: 'red', label: 'Red', word: 'red', color: '#d8434b', swatch: '#c8141e' },
+  { key: 'fde', label: 'FDE', word: 'flat dark earth', color: '#ad9472', swatch: '#8b7355' },
 ]
-export const finishOf = key => FINISHES.find(f => f.key === key) ?? FINISHES[0]
+// (a finish the shop once had, for what is still in a cart)
+const FORMER = [{ key: 'blue', label: 'Blue', word: 'blue', color: '#4472d4', swatch: '#2a5fb0' }]
+export const finishOf = key => FINISHES.find(f => f.key === key) ?? FORMER.find(f => f.key === key) ?? FINISHES[0]
 
 // the price follows the part: machining by the volume of what is left, anodizing in a colour extra
 export const priceOf = (volume, finish) => 24 + (0.95 * volume) / 1000 + (finish === 'raw' ? 0 : 14)
