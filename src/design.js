@@ -6,8 +6,8 @@ export const T = 3.6 // the vanes' thickness (mm)
 export const HOLE = 7 // the balance holes' diameter (mm)
 export const FRAC = 0.25 // where the balance holes sit, of the way from the hub to the rim
 
-// The model's parameters, as the shop starts them: the first film's part. Ø120, nine vanes 32 high,
-// a 16 bore, the vanes swept 62° round and bowed by 0.1555 of their chord.
+// The model's parameters, as the shop starts them: Ø120, nine vanes 32 high, a 16 bore, the vanes
+// swept 62° round and bowed by 0.1555 of their chord.
 export const BASE = { diameter: 120, vanes: 9, vaneHeight: 32, bore: 16, wrap: 62, bow: 0.1555 }
 export const PARAMS = Object.keys(BASE)
 export const RANGE = { diameter: [80, 200], vanes: [3, 12], vaneHeight: [16, 48], wrap: [30, 120], bow: [0.04, 0.45] }

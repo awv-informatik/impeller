@@ -1,6 +1,5 @@
-// What a hand is changing, as large as the page, for a moment: the film's flourish. On a wide screen
-// it stands where the headline was (the headline steps aside); on narrower ones it stands behind the
-// part, in its room.
+// What a hand is changing, as large as the page, for a moment. On a wide screen it stands where the
+// headline was (the headline steps aside); on narrower ones it stands behind the part, in its room.
 import { useEffect, useState } from 'react'
 import { useShop } from '../store'
 import { finishOf } from '../design'

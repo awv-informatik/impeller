@@ -1,4 +1,4 @@
-// impeller.parts: the shop from the film "Part to parcel.", for real. The page is the film's (the nav,
+// impeller.parts: a shop for one part, a pump impeller made to order. The page is the shop (the nav,
 // the headline, the part, the configurator, the footer); the part is the real model, rebuilt by
 // ClassCAD in the page at every change.
 import { useEffect } from 'react'

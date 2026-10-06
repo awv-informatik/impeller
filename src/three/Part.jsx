@@ -1,5 +1,5 @@
-// The part in the CAD app's look, as the film draws it: an even light and one lamp over the viewer's
-// left shoulder (wherever the part is turned), its B-rep edges and its silhouettes inked.
+// The part in a CAD app's look: an even light and one lamp over the viewer's left shoulder (wherever
+// the part is turned), its B-rep edges and its silhouettes inked.
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'

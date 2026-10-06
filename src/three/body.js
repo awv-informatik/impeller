@@ -1,4 +1,4 @@
-// The engine's solid as three.js geometry, the way the film draws its parts: the faces (each keeping
+// The engine's solid as three.js geometry, the way a CAD app draws it: the faces (each keeping
 // its surface type, for the silhouettes), the B-rep's own edges as line segments, and the silhouettes
 // of its curved faces as the eye sees them.
 import * as THREE from 'three'

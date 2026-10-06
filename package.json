@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "impeller.parts: the shop from Part to parcel., for real. A pump impeller configured live on its parametric ClassCAD model (impeller.ofb) running in the browser with buerli.io",
+  "description": "A web shop for a parametric part, built on one OFB file: a pump impeller configured live on its ClassCAD model (impeller.ofb), running in the browser with buerli.io",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
