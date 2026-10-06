@@ -1,6 +1,7 @@
-// The impeller's design, in the same math as the expressions of its model (public/impeller.ofb).
-// ClassCAD builds the part; this is only what the page must know before ClassCAD answers: where the
-// sketch's handles are while they are dragged, which configurations the controls allow, and the price.
+// The shop's own rules for the impeller, in the same math as the expressions of its model
+// (public/impeller.ofb). ClassCAD builds the part; this is only what the page must know before ClassCAD
+// answers: which configurations the controls allow, where the balance holes will go while a handle is
+// held, the price, and the small drawings of a part from its numbers (the loader, the cart).
 
 export const T = 3.6 // the vanes' thickness (mm)
 export const HOLE = 7 // the balance holes' diameter (mm)

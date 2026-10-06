@@ -84,12 +84,15 @@ same sketch and puts the handle exactly where the hand is.
 
 ## The model
 
-[`cad/impeller.js`](cad/impeller.js) is the script the model was built with: run it with the
-ClassCAD MCP, then save the drawing as OFB. It makes a plate, a vane extruded from a sketch and
-patterned round, a hub, balance holes patterned round, and a bore through it all, driven by six
-parameters:
+[`public/impeller.ofb`](public/impeller.ofb) is the whole model: a plate, a vane extruded from a
+sketch and patterned round, a hub, balance holes patterned round, and a bore through it all. Open it
+in any ClassCAD app to see its history. The page works with it through two things the file offers,
+both found by name.
 
-| Parameter    | What it is                                                     | Starts at |
+**Its expressions.** Six of them are the shop's controls. The rest follow from those, in the model
+itself: the hub, the pitch, where the balance holes go.
+
+| Expression   | What it is                                                     | Starts at |
 | ------------ | -------------------------------------------------------------- | --------: |
 | `diameter`   | the plate's diameter (mm)                                      |       120 |
 | `vanes`      | how many vanes (and balance holes)                             |         9 |
@@ -98,18 +101,18 @@ parameters:
 | `wrap`       | how far round the vane sweeps from the hub to the rim (°)      |        62 |
 | `bow`        | how far the vane bows off its chord, as a share of the chord   |    0.1555 |
 
-The vane is drawn about its middle line, an arc from the hub through its middle to the rim. `Sweep`
-is how far round the rim it ends (from `wrap`). `Bow` is the angle between the chord and the line to
-the arc's middle (from `atan(2·bow)`, so the vane keeps its curve whatever its length). The walls
-run alongside the middle line, between two square caps. The balance holes are placed by the model's
-expressions, half a pitch round from where each vane crosses their circle.
+**Its vane sketch.** The vane is drawn about a curve, an arc from `A` on the hub through its middle
+`P` to `B` on the rim, and two of the sketch's dimensions hold it. `Sweep` is how far round the rim
+`B` stands (from `wrap`). `Bow` is the angle between the chord and the line to `P` (from
+`atan(2·bow)`, so the vane keeps its curve whatever its length). The walls run alongside the curve,
+between two square caps. The page draws the sketch as ClassCAD solved it: the curve, the vane's
+walls and caps, the balance hole, and the three handles on `A`, `P` and `B`.
 
-The controls only offer parts one would machine: the vane stepper stops at as many vanes as fit,
-the diameter slider at the smallest the vanes allow, and the sketch's handles at curves that keep
-the balance holes clear of the vanes.
-
-The price is made up for the demo (CHF 24, plus 0.95 per cm³ of part, plus 14 for a coloured
-anodizing), and there is no checkout.
+On top of that the page has only its own rules. The controls offer only parts one would machine: the
+vane stepper stops at as many vanes as fit, the diameter slider at the smallest the vanes allow, and
+the handles at curves that keep the balance holes clear of the vanes. The price is made up for the
+demo (CHF 24, plus 0.95 per cm³ of part, plus 14 for a coloured anodizing), and there is no
+checkout.
 
 ## Run it
 
@@ -130,6 +133,7 @@ localhost. To publish on a domain of your own, use a token from your own ClassCA
 
 ## How the code is laid out
 
+- `public/impeller.ofb`: the model.
 - `src/engine.js`: the CAD session. The calls above, and what a real page needs around them.
   Changes are queued so that ClassCAD always works on the newest one: a slider swept across its
   track is a handful of rebuilds, and the part changes once more, to where the hand lets go. It also
@@ -138,13 +142,12 @@ localhost. To publish on a domain of your own, use a token from your own ClassCA
   `useBuerliCadFacade`), and its session handed to the engine.
 - `src/store.js`: the page's state (zustand): how far the engine is, what the controls want, what
   was last built, and the cart.
-- `src/design.js`: the model's design math, repeated for what the page must know before ClassCAD
-  answers: where the sketch's handles are while they move, which configurations the controls allow,
-  and the price.
+- `src/design.js`: the shop's own rules, for what it must know before ClassCAD answers: which
+  configurations the controls allow (whether the balance holes clear the vanes), where the holes
+  will go while a handle is held, and the price.
 - `src/three/`: the part, drawn from ClassCAD's tessellation in a flat CAD look. `body.js` turns it
   into faces, edges and silhouettes; `Part.jsx` draws them; `View.jsx` is the turning view.
 - `src/ui/`: the page. `Card` is the configurator, `Stage` holds the part (or its sketch), `Sketch`
   is the vane sketch (`placeReadout.js` keeps its readout clear of the handles), and `Hero`,
   `Giant`, `Cart` and `Nav` are the rest. The layout fits any screen, from a phone held upright to
   a wide monitor.
-- `cad/impeller.js`: the script the model was built with.

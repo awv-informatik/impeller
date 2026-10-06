@@ -6,8 +6,8 @@
 // Changes are queued: while the engine rebuilds, only the latest wish waits; when it is done it goes
 // on with that one. So a slider can be dragged as fast as a hand likes.
 //
-// The vane's curve is its sketch's own. Each of the sketch's two handles is held by one dimension,
-// Sweep and Bow (see cad/impeller.js), and a handle is dragged in the sketch alone: the sketch is
+// The vane's curve is its sketch's own. Each of the sketch's two handles is held by one dimension of
+// the model's vane sketch, Sweep and Bow, and a handle is dragged in the sketch alone: the sketch is
 // opened, so the features after it wait, and the handle's dimension takes the value the hand gives
 // it. The solver re-solves the sketch and nothing else, and the vane follows the hand. When the hand
 // lets go, the sketch stays open a moment, for a hand that grips again; then the model's `wrap` and
@@ -94,7 +94,7 @@ async function load(s) {
     built = solved
     if (first) {
       // the controls start where the model is
-      set({ note: 'Building the part' })
+      set({ note: 'Reading the part' })
       const r = await read(s, solved)
       if (gen !== generation) return
       loaded = true
@@ -366,8 +366,8 @@ async function close(h) {
 
 // ---- reading back
 
-// What the engine built: the current solid (its faces and edges), its volume, the vane sketch (marked
-// with the configuration it was solved for).
+// What the engine built: the current solid (its faces and edges), its volume, its hub's diameter (an
+// expression of the model), and the vane sketch (marked with the configuration it was solved for).
 async function read(s, config) {
   const tree = await s.facade.tree({ refresh: true })
   const solids = Object.values(tree).filter(n => n.class === 'CC_Solid' && !n.members?.consumed?.value)
@@ -376,13 +376,15 @@ async function read(s, config) {
   const containers = (graphic?.containers ?? []).filter(c => ids.has(c.id))
   const body = containers.length ? makeBody(containers) : null
   const mass = await s.api.part.calculateMassProperties({ id: s.part })
+  const hub = (await s.api.part.getExpression({ id: s.part, name: 'hub' }))?.value ?? null
   const sketch = readSketch(tree)
-  return { body, volume: mass?.volume ?? null, sketch: sketch && { ...sketch, for: JSON.stringify(config) } }
+  return { body, volume: mass?.volume ?? null, hub, sketch: sketch && { ...sketch, for: JSON.stringify(config) } }
 }
 
-// The vane sketch as the engine solved it: its two walls, its two caps, the balance hole. It is read
-// from buerli's copy of the model's tree, which every answer of the engine keeps up to date: no calls.
-// (The elements are found by the names they were given in cad/impeller.js.)
+// The vane sketch as the engine solved it: the curve the vane is drawn about and its three points, A on
+// the hub, P its middle and B on the rim (where the page's handles go), the vane's two walls and two
+// caps, the balance hole. It is read from buerli's copy of the model's tree, which every answer of the
+// engine keeps up to date: no calls. (The sketch's elements are found by their names in the model.)
 function readSketch(tree) {
   const nodes = Object.values(tree)
   const sketch = nodes.find(n => n.name === 'Vane sketch')
@@ -395,6 +397,10 @@ function readSketch(tree) {
   const arc = g => ({ start: at(g, 'startPoint'), end: at(g, 'endPoint'), center: at(g, 'center') })
   const line = g => ({ start: at(g, 'startPoint'), end: at(g, 'endPoint') })
   return {
+    a: at(kid('To A'), 'endPoint'),
+    p: at(kid('A to P'), 'endPoint'),
+    b: at(kid('To B'), 'endPoint'),
+    middle: arc(kid('Middle')),
     outer: arc(kid('Outer')),
     inner: arc(kid('Inner')),
     capA: line(kid('Cap A')),

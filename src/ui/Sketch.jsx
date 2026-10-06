@@ -1,12 +1,13 @@
-// The vane sketch, seen down the part's axis: the part's outline in ink, the vanes in red as the
-// engine solved the sketch (and patterned it round), and the three handles of the curve they are
-// drawn about. The end handle sweeps the vane round the rim (the model's `wrap`), the middle one bows
-// it (its `bow`). A handle is dragged in the sketch itself: the engine re-solves the sketch at every
-// move, and rebuilds the part when it is let go (engine.js).
+// The vane sketch, seen down the part's axis: the model's own sketch, as the engine solved it. The
+// part's outline in ink, the vanes in red (patterned round), the curve they are drawn about, and three
+// handles on its points: A on the hub, P its middle, B on the rim. The end handle sweeps the vane round
+// the rim (the sketch's Sweep dimension, the model's `wrap`), the middle one bows it (Bow, and `bow`). A
+// handle is dragged in the sketch itself: the engine re-solves the sketch at every move, and rebuilds
+// the part when it is let go (engine.js).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShop } from '../store'
 import { dragSketch, dropSketch, grabSketch } from '../engine'
-import { RANGE, design, middle, sound } from '../design'
+import { RANGE, design, sound } from '../design'
 import { placeReadout } from './placeReadout'
 
 // a handle's move: the curve changed, if the part would still be one to machine
@@ -36,10 +37,26 @@ function arcPts(a, n = 28) {
   })
 }
 
+// The sketch's chord, from A to B: its middle, its length, and the way square off it that the curve bows.
+function chordOf({ a, b }) {
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+  const n = [(a[1] - b[1]) / length, (b[0] - a[0]) / length]
+  return { mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], length, n }
+}
+// where P stands for a bow: square off the chord's middle, by `bow` chords
+const offChord = (c, bow) => [c.mid[0] + c.n[0] * bow * c.length, c.mid[1] + c.n[1] * bow * c.length]
+// where B stands for a sweep: on the rim (as far out as the sketch has it), `wrap` degrees round
+function onRim(b, wrap) {
+  const r = Math.hypot(b[0], b[1])
+  const w = (wrap * Math.PI) / 180
+  return [r * Math.cos(w), r * Math.sin(w)]
+}
+
 export function Sketch() {
   const want = useShop(s => s.want)
   const solved = useShop(s => s.solved)
   const sketch = useShop(s => s.sketch)
+  const hub = useShop(s => s.hub)
   const body = useShop(s => s.body)
   const busy = useShop(s => s.busy)
   const svg = useRef()
@@ -55,7 +72,6 @@ export function Sketch() {
     if (!drag) setR(want.diameter / 2 + 18)
   }, [want.diameter, drag])
 
-  const d = design(want)
   // the part's outline from above: all its edges, flattened
   const outline = useMemo(() => {
     if (!body) return ''
@@ -64,8 +80,7 @@ export function Sketch() {
     for (let i = 0; i < e.length; i += 6) p += `M${xy([e[i], e[i + 1]])}L${xy([e[i + 3], e[i + 4]])}`
     return p
   }, [body])
-  // the vanes and the balance holes, as the engine solved the sketch (for what is built, or under a hand),
-  // patterned round
+  // the vanes, as the engine solved the sketch (for what is built, or under a hand), patterned round
   const fresh = sketch && (sketch.for === 'held' || (solved && sketch.for === JSON.stringify(solved)))
   const vanes = useMemo(() => {
     if (!fresh || !sketch.outer || !sketch.inner) return []
@@ -73,15 +88,24 @@ export function Sketch() {
     const turned = k => loop.map(p => rot(p, (2 * Math.PI * k) / solved.vanes))
     return Array.from({ length: solved.vanes }, (_, k) => pathOf(turned(k), true))
   }, [sketch, solved, fresh])
-  // (while a handle is held, the balance holes are where the model's expressions will put them when it is
-  // let go: the same math, in design.js)
+  // the curve they are drawn about
+  const curve = fresh && sketch.middle?.center ? pathOf(arcPts(sketch.middle, 48)) : ''
+
+  // The handles stand on the sketch's points. The one in hand goes where the hand is taking its
+  // dimension, along the sketch's own lines: B round the rim, P square off the chord.
+  const chord = sketch?.a && sketch.b && chordOf(sketch)
+  const A = sketch?.a
+  const B = drag === 'end' && sketch?.b ? onRim(sketch.b, want.wrap) : sketch?.b
+  const P = drag === 'mid' && chord ? offChord(chord, want.bow) : sketch?.p
+
+  // The balance holes, where the sketch has them. (While a handle is held, they are where the model's
+  // expressions will put them when it is let go: the same math, in design.js.)
   const underHand = drag || sketch?.for === 'held'
+  const d = underHand && design(want)
+  const hole = d ? [d.holeR * Math.cos(d.holeAng), d.holeR * Math.sin(d.holeAng)] : fresh && sketch.hole
+  const holes = hole ? Array.from({ length: solved.vanes }, (_, k) => rot(hole, (2 * Math.PI * k) / solved.vanes)) : []
   // (a hand that took a handle while the engine was busy: until the engine follows it, the vanes wait, dim)
   const waiting = drag && sketch?.for !== 'held'
-  const hole = underHand ? [d.holeR * Math.cos(d.holeAng), d.holeR * Math.sin(d.holeAng)] : fresh && sketch.hole
-  const holes = hole ? Array.from({ length: solved.vanes }, (_, k) => rot(hole, (2 * Math.PI * k) / solved.vanes)) : []
-  // the curve the vanes are drawn about, as wanted (it leads; the engine's vanes follow it)
-  const mid = pathOf(middle(d, 48))
 
   // a pointer, in the sketch's own millimetres (y up)
   const toModel = e => {
@@ -96,11 +120,10 @@ export function Sketch() {
       if (deg < -90) deg += 360
       const wrap = Math.round(clamp(deg, ...RANGE.wrap) * 2) / 2
       if (wrap !== want.wrap) change({ wrap })
-    } else {
+    } else if (chord) {
       // the bow: how far the middle handle is off the chord, of the chord's length
-      const n = [(d.A[1] - d.B[1]) / d.chord, (d.B[0] - d.A[0]) / d.chord]
-      const sag = (x - (d.A[0] + d.B[0]) / 2) * n[0] + (y - (d.A[1] + d.B[1]) / 2) * n[1]
-      const bow = Math.round(clamp(sag / d.chord, ...RANGE.bow) * 1000) / 1000
+      const sag = (x - chord.mid[0]) * chord.n[0] + (y - chord.mid[1]) * chord.n[1]
+      const bow = Math.round(clamp(sag / chord.length, ...RANGE.bow) * 1000) / 1000
       if (bow !== want.bow) change({ bow })
     }
   }
@@ -128,7 +151,7 @@ export function Sketch() {
   const placeTheReadout = () => {
     const el = readout.current
     const sh = sheet.current
-    if (!el || !sh) return
+    if (!el || !sh || !A || !B || !P) return
     const S = sh.clientWidth
     const px = p => [(0.5 + p[0] / (2 * R)) * S, (0.5 - p[1] / (2 * R)) * S]
     const s = sh.getBoundingClientRect()
@@ -139,8 +162,8 @@ export function Sketch() {
     const { x, y, place } = placeReadout({
       sheet: S,
       box: [el.offsetWidth, el.offsetHeight],
-      handle: px(d.B),
-      knobs: [d.A, d.apex, d.B].map(px),
+      handle: px(B),
+      knobs: [A, P, B].map(px),
       over,
       last: readoutPlace.current,
     })
@@ -176,10 +199,10 @@ export function Sketch() {
             <mask id="paper">
               <rect x={-R} y={-R} width={2 * R} height={2 * R} fill="url(#fade)" />
             </mask>
-            {/* (inside the hub the vanes run into it: the hub covers them) */}
+            {/* (inside the hub the vanes run into it: the hub, as wide as the model's `hub`, covers them) */}
             <mask id="hub">
               <rect x={-R} y={-R} width={2 * R} height={2 * R} fill="#fff" />
-              <circle r={(solved ? design(solved).hub : d.hub) / 2} fill="#000" />
+              {hub && <circle r={hub / 2} fill="#000" />}
             </mask>
           </defs>
           <rect x={-R} y={-R} width={2 * R} height={2 * R} fill="url(#major)" mask="url(#paper)" />
@@ -193,25 +216,31 @@ export function Sketch() {
             {holes.map((h, i) => (
               <circle key={i} cx={h[0]} cy={h[1]} r="3.5" className="hole" />
             ))}
-            <path d={mid} className={'mid' + (busy ? ' busy' : '')} />
+            <path d={curve} className={'mid' + (busy ? ' busy' : '')} />
           </g>
         </svg>
-        <div className="sk-handle fixed" style={at(d.A)} title="On the hub" />
-        <div
-          className={'sk-handle grab' + (drag === 'mid' ? ' on' : '')}
-          style={at(d.apex)}
-          title="Bow"
-          {...grab('mid')}
-        />
-        <div
-          className={'sk-handle grab' + (drag === 'end' ? ' on' : '')}
-          style={at(d.B)}
-          title="Sweep"
-          {...grab('end')}
-        />
-        <div ref={readout} className="sk-dim">
-          <b>{Math.round(want.wrap)}°</b> sweep · bow {d.sag.toFixed(1)}
-        </div>
+        {A && <div className="sk-handle fixed" style={at(A)} title="On the hub" />}
+        {P && (
+          <div
+            className={'sk-handle grab' + (drag === 'mid' ? ' on' : '')}
+            style={at(P)}
+            title="Bow"
+            {...grab('mid')}
+          />
+        )}
+        {B && (
+          <div
+            className={'sk-handle grab' + (drag === 'end' ? ' on' : '')}
+            style={at(B)}
+            title="Sweep"
+            {...grab('end')}
+          />
+        )}
+        {chord && (
+          <div ref={readout} className="sk-dim">
+            <b>{Math.round(want.wrap)}°</b> sweep · bow {(want.bow * chord.length).toFixed(1)}
+          </div>
+        )}
       </div>
       <div className="sk-head">
         <b>Vane sketch</b>

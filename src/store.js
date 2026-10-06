@@ -30,6 +30,7 @@ export const useShop = create((set, get) => ({
   body: null,
   sketch: null,
   volume: null,
+  hub: null,
   finish: 'raw',
   // what was just changed, and when (the page shows it, large, for a moment)
   touch: null,

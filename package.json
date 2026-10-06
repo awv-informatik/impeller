@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "vite build && firebase deploy --only hosting:production",
-    "format": "prettier --write \"src/**/*.{js,jsx}\" \"cad/**/*.js\""
+    "format": "prettier --write \"src/**/*.{js,jsx}\""
   },
   "dependencies": {
     "@buerli.io/classcad": "1.2.0",
