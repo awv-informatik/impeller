@@ -3,7 +3,7 @@
 // price follows its volume.
 import { useEffect, useRef, useState } from 'react'
 import { useShop } from '../store'
-import { request } from '../engine'
+import { release, request } from '../engine'
 import { BORES, FINISHES, PARAMS, RANGE, chf, finishOf, maxVanes, minDiameter, priceOf, sound } from '../design'
 
 // a control's change: a click goes to the engine at once, a drag after a moment
@@ -66,6 +66,8 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
         from(e, true)
       }}
       onPointerMove={e => e.currentTarget.hasPointerCapture(e.pointerId) && from(e, true)}
+      onPointerUp={release}
+      onPointerCancel={release}
       onKeyDown={e => {
         const d = (e.shiftKey ? 10 : 1) * step
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') set(value + d)
@@ -83,14 +85,29 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
 // the vane curve, small: its middle line as bowed and swept
 function MiniCurve({ wrap, bow }) {
   const w = (wrap * Math.PI) / 180
-  const A = [6, 25], B = [6 + 52 * Math.sin(w * 0.75), 25 - 22 * Math.sin(Math.min(w * 0.9, Math.PI / 2)) ** 0.5]
+  let A = [6, 25], B = [6 + 52 * Math.sin(w * 0.75), 25 - 22 * Math.sin(Math.min(w * 0.9, Math.PI / 2)) ** 0.5]
   const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]
   const nx = -(B[1] - A[1]), ny = B[0] - A[0], L = Math.hypot(nx, ny) || 1
-  const q = [M[0] + (nx / L) * bow * 2 * 34, M[1] + (ny / L) * bow * 2 * 34]
+  let q = [M[0] + (nx / L) * bow * 2 * 34, M[1] + (ny / L) * bow * 2 * 34]
+  // (it stays inside its 64×30, dots and all: a curve bowed and swept far is drawn smaller, and moved
+  // in only as far as it has to be, so that it never jumps)
+  const on = t => [0, 1].map(i => (1 - t) ** 2 * A[i] + 2 * t * (1 - t) * q[i] + t * t * B[i])
+  const turns = [0, 1].map(i => (A[i] - q[i]) / (A[i] - 2 * q[i] + B[i])).filter(t => t > 0 && t < 1)
+  const pts = [A, B, ...turns.map(on)]
+  const lo = [0, 1].map(i => Math.min(...pts.map(p => p[i]))), hi = [0, 1].map(i => Math.max(...pts.map(p => p[i])))
+  const P = 4, box = [64, 30]
+  const s = Math.min(1, ...[0, 1].map(i => (box[i] - 2 * P) / (hi[i] - lo[i] || 1)))
+  const c = [0, 1].map(i => (lo[i] + hi[i]) / 2)
+  const shift = [0, 1].map(i => {
+    const a = c[i] + (lo[i] - c[i]) * s, b = c[i] + (hi[i] - c[i]) * s
+    return a < P ? P - a : b > box[i] - P ? box[i] - P - b : 0
+  })
+  const fit = p => [0, 1].map(i => c[i] + (p[i] - c[i]) * s + shift[i])
+  ;[A, B, q] = [fit(A), fit(B), fit(q)]
   return (
     <svg viewBox="0 0 64 30" width="64" height="30">
-      <path d={`M${A.join(' ')}Q${q.map(v => v.toFixed(1)).join(' ')} ${B.map(v => v.toFixed(1)).join(' ')}`} fill="none" stroke="#e7000b" strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx={A[0]} cy={A[1]} r="2.6" fill="#0f1320" />
+      <path d={`M${A.map(v => v.toFixed(1)).join(' ')}Q${q.map(v => v.toFixed(1)).join(' ')} ${B.map(v => v.toFixed(1)).join(' ')}`} fill="none" stroke="#e7000b" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx={A[0].toFixed(1)} cy={A[1].toFixed(1)} r="2.6" fill="#0f1320" />
       <circle cx={B[0].toFixed(1)} cy={B[1].toFixed(1)} r="2.6" fill="#0f1320" />
     </svg>
   )

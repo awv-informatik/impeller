@@ -20,6 +20,7 @@ let loaded = false // the model is in the session
 let built = null // the configuration the session's model has (the page shows the one it last read back)
 let running = false
 let next = null
+let final = false // the wish waiting is one a hand has let go of (or a click): the one to show
 
 const set = s => useShop.setState(s)
 // (how a dead session answers: it is not connected, its drawing is gone)
@@ -105,6 +106,7 @@ const QUICK = 70
 let timer = null
 export function request(want, { now = false } = {}) {
   next = want
+  final = now
   if (!loaded || running) return
   if (now) {
     clearTimeout(timer)
@@ -119,6 +121,17 @@ export function request(want, { now = false } = {}) {
 }
 const pause = ms => new Promise(r => setTimeout(r, ms))
 
+// a hand lets go: where it let go is final. A rebuild the engine is still busy with is out of date
+// by then, and is not shown; the final one is built at once, so the part changes once, to it
+export function release() {
+  if (!next) return
+  final = true
+  if (!loaded || running) return
+  clearTimeout(timer)
+  timer = null
+  run()
+}
+
 async function run() {
   if (running || !loaded) return
   running = true
@@ -132,8 +145,11 @@ async function run() {
     try {
       await s.api.part.updateExpression({ id: s.part, toUpdate })
       built = { ...want }
+      // (a hand has let go of a newer one meanwhile: this one is out of date, not read back nor shown)
+      if (next && final) continue
       const r = await read(s, useShop.getState().sketchOpen)
       if (gen !== generation) break
+      if (next && final) continue
       if (r.sketch) r.sketch = stamp(r.sketch, want)
       set({ solved: { ...want }, ...r, error: null })
     } catch (e) {

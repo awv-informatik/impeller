@@ -2,9 +2,9 @@
 // engine solved the sketch (and patterned it round), and the three handles of the curve they are
 // drawn about. The end handle sweeps the vane round the rim (the model's `wrap`), the middle one bows
 // it (its `bow`). Every move is a change of those two parameters; the engine re-solves the sketch.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShop } from '../store'
-import { request, refreshSketch } from '../engine'
+import { refreshSketch, release, request } from '../engine'
 import { RANGE, design, middle, sound } from '../design'
 
 const change = patch => {
@@ -38,6 +38,9 @@ export function Sketch() {
   const body = useShop(s => s.body)
   const busy = useShop(s => s.busy)
   const svg = useRef()
+  const sheet = useRef()
+  const dim = useRef()
+  const side = useRef(-1)
   const held = useRef(null)
   const [drag, setDrag] = useState(null)
   useEffect(() => {
@@ -98,6 +101,53 @@ export function Sketch() {
     }
   }
   const at = p => ({ left: `${50 + (p[0] / (2 * R)) * 100}%`, top: `${50 - (p[1] / (2 * R)) * 100}%` })
+  // the readout of the sweep and the bow: by the end handle, on the side of it away from the part,
+  // wherever it is clear of all three handles (and of the sketch's title and its button, which on a
+  // phone stand over the sheet) and inside the sheet; where there is no room by it, in a corner of
+  // the sheet, where no handle goes. (It keeps its place while that still fits, so that it does not
+  // hop about under the hand.)
+  const place = () => {
+    const el = dim.current, sh = sheet.current
+    if (!el || !sh) return
+    const S = sh.clientWidth, w = el.offsetWidth, h = el.offsetHeight
+    const px = p => [(0.5 + p[0] / (2 * R)) * S, (0.5 - p[1] / (2 * R)) * S]
+    const [bx, by] = px(d.B), knobs = [d.A, d.apex, d.B].map(px)
+    const g = 26, k = g * 0.7, m = 6, clear = 22
+    const spots = [
+      [bx + g, by - h / 2], [bx - g - w, by - h / 2], [bx - w / 2, by - g - h], [bx - w / 2, by + g],
+      [bx + k, by - k - h], [bx - k - w, by - k - h], [bx + k, by + k], [bx - k - w, by + k],
+      [m, m], [S - m - w, m], [m, S - m - h], [S - m - w, S - m - h],
+    ]
+    const sr = sh.getBoundingClientRect()
+    const over = [...sh.parentNode.querySelectorAll('.sk-head > *, .sk-done')].map(e => e.getBoundingClientRect()).map(r => [r.left - sr.left - 4, r.top - sr.top - 4, r.right - sr.left + 4, r.bottom - sr.top + 4])
+    const ox = bx - S / 2, oy = by - S / 2, ol = Math.hypot(ox, oy) || 1
+    // (each spot as it would stand, moved into the sheet where it sticks out of it)
+    const fit = ([x, y]) => [Math.max(m, Math.min(S - m - w, x)), Math.max(m, Math.min(S - m - h, y))]
+    const score = (p, i) => {
+      const [x, y] = fit(p)
+      const cx = x + w / 2 - bx, cy = y + h / 2 - by
+      let v = (cx * ox + cy * oy) / (ol * (Math.hypot(cx, cy) || 1))
+      for (const [kx, ky] of knobs) if (Math.hypot(Math.max(x - kx, 0, kx - x - w), Math.max(y - ky, 0, ky - y - h)) < clear) v -= 10
+      for (const [l, t, r, b] of over) if (x < r && x + w > l && y < b && y + h > t) v -= 10
+      v -= 0.01 * Math.hypot(x - p[0], y - p[1])
+      v -= 0.004 * Math.max(0, Math.hypot(Math.max(x - bx, 0, bx - x - w), Math.max(y - by, 0, by - y - h)) - g)
+      return i === side.current ? v + 0.35 : v
+    }
+    let best = 0
+    spots.forEach((p, i) => score(p, i) > score(spots[best], best) && (best = i))
+    side.current = best
+    const [x, y] = fit(spots[best])
+    el.style.left = `${x.toFixed(1)}px`
+    el.style.top = `${y.toFixed(1)}px`
+  }
+  const placeNow = useRef(place)
+  placeNow.current = place
+  useLayoutEffect(place)
+  useEffect(() => {
+    const ro = new ResizeObserver(() => placeNow.current())
+    ro.observe(sheet.current)
+    return () => ro.disconnect()
+  }, [])
   const handle = (k, p) => (
     <div
       className={'sk-handle' + (k ? ' grab' : ' fixed') + (drag === k && k ? ' on' : '')}
@@ -114,16 +164,18 @@ export function Sketch() {
       onPointerUp={() => {
         held.current = null
         setDrag(null)
+        release()
       }}
       onPointerCancel={() => {
         held.current = null
         setDrag(null)
+        release()
       }}
     />
   )
   return (
     <div className="sketch">
-      <div className="sheet">
+      <div className="sheet" ref={sheet}>
         <svg ref={svg} viewBox={`${-R} ${-R} ${2 * R} ${2 * R}`}>
           <defs>
             <pattern id="minor" width="5" height="5" patternUnits="userSpaceOnUse">
@@ -163,7 +215,7 @@ export function Sketch() {
         {handle(null, d.A)}
         {handle('mid', d.apex)}
         {handle('end', d.B)}
-        <div className={'sk-dim' + (d.B[0] > 0 ? ' left' : '')} style={at([d.B[0] * 1.06, d.B[1] * 1.06])}>
+        <div ref={dim} className="sk-dim">
           <b>{Math.round(want.wrap)}°</b> sweep · bow {d.sag.toFixed(1)}
         </div>
       </div>
