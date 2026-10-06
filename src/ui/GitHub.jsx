@@ -1,5 +1,5 @@
 // where the shop's source is, and GitHub's mark
-export const REPO = 'https://github.com/drcmda/impeller'
+export const REPO = 'https://github.com/awv-informatik/impeller'
 
 export function GitHub({ size = 16 }) {
   return (

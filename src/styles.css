@@ -99,7 +99,7 @@ i.cube { width: 18px; height: 18px; flex: none; display: inline-block; backgroun
 .loader { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(14px, 2.6vh, 26px); padding: 20px; text-align: center; pointer-events: none; transition: opacity 0.6s ease, transform 0.6s ease; }
 .loader.out { opacity: 0; transform: scale(0.96); }
 .loader .drawing { width: min(64%, 58cqh, 400px); aspect-ratio: 1; overflow: visible; }
-.loader .turn { transform-box: view-box; transform-origin: 50% 50%; animation: turn 18s linear infinite; }
+.loader .turn { transform-box: view-box; transform-origin: 0 0; animation: turn 18s linear infinite; }
 @keyframes turn { to { transform: rotate(-360deg); } }
 .loader .ln { fill: none; stroke: #0f1320; stroke-width: 0.5; stroke-linejoin: round; stroke-dashoffset: var(--len); animation: draw 5.4s cubic-bezier(0.65, 0, 0.25, 1) infinite; animation-delay: calc(var(--i) * 0.14s); }
 .loader .ln.thin { stroke-width: 0.4; }
