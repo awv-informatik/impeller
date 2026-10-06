@@ -39,7 +39,6 @@ export const useShop = create((set, get) => ({
   cart: loadCart(),
   cartOpen: false,
 
-  touchKey: key => set({ touch: { key, at: performance.now() } }),
   setFinish: finish => set({ finish, touch: { key: 'finish', at: performance.now() } }),
   openSketch: open => set({ sketchOpen: open }),
   openCart: open => set({ cartOpen: open }),

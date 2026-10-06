@@ -119,8 +119,6 @@ i.cube { width: 18px; height: 18px; flex: none; display: inline-block; backgroun
 .status b { font: 600 18px/1.3 var(--ui); }
 .status span { font: 500 14px/1.4 var(--mono); color: var(--accent); max-width: 460px; }
 .status small { font: 500 12px/1.4 var(--mono); color: var(--dim); max-width: 380px; }
-.status .spin { width: 34px; height: 34px; border-radius: 6px; background: var(--accent); box-shadow: inset -8px -8px 0 rgba(0, 0, 0, 0.18); animation: spin 1.1s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
-@keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
 
 /* ---- the vane sketch */
 .sketch { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }

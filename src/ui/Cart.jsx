@@ -8,14 +8,24 @@ import { chf, design, finishOf, middle } from '../design'
 function Thumb({ config, finish }) {
   const d = design(config)
   const R = config.diameter / 2
-  const m = 'M' + middle(d, 24).map(p => p.map(v => v.toFixed(1)).join(' ')).join('L')
+  const points = middle(d, 24).map(p => p.map(v => v.toFixed(1)).join(' '))
+  const line = `M${points.join('L')}`
   const color = finishOf(finish).color
   return (
     <svg viewBox={`${-R - 4} ${-R - 4} ${2 * R + 8} ${2 * R + 8}`} className="thumb">
       <g transform="scale(1,-1)">
         <circle r={R} fill={color} stroke="#0f1320" strokeWidth={R / 40} />
         {Array.from({ length: config.vanes }, (_, k) => (
-          <path key={k} d={m} transform={`rotate(${(k * 360) / config.vanes})`} fill="none" stroke="#0f1320" strokeWidth={R / 14} strokeLinecap="round" opacity="0.85" />
+          <path
+            key={k}
+            d={line}
+            transform={`rotate(${(k * 360) / config.vanes})`}
+            fill="none"
+            stroke="#0f1320"
+            strokeWidth={R / 14}
+            strokeLinecap="round"
+            opacity="0.85"
+          />
         ))}
         <circle r={d.hub / 2} fill={color} stroke="#0f1320" strokeWidth={R / 40} />
         <circle r={config.bore / 2} fill="#fff" stroke="#0f1320" strokeWidth={R / 40} />
@@ -27,7 +37,11 @@ function Thumb({ config, finish }) {
 function Buy({ disabled }) {
   const [shake, setShake] = useState(0)
   return (
-    <button key={shake} className={'buy' + (shake ? ' shake' : '')} disabled={disabled} onClick={() => setShake(n => n + 1)}>
+    <button
+      key={shake}
+      className={'buy' + (shake ? ' shake' : '')}
+      disabled={disabled}
+      onClick={() => setShake(n => n + 1)}>
       <span>Buy</span>
       <i>→</i>
     </button>

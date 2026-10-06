@@ -15,7 +15,7 @@ edges and silhouettes); and the price follows the volume the engine measures.
 - **Vane curve:** *Edit the sketch* opens the vane sketch, seen down the part's axis. Drag the end
   handle round the rim to sweep the vanes, and the middle handle to bow them. The red vanes are the
   sketch as the engine solved it.
-- **Finish:** raw, black, red or blue anodized.
+- **Finish:** raw, or black, red or flat dark earth (FDE) anodized.
 - **Order** puts the part, exactly as configured and built, in the cart. The cart keeps it (in the
   browser), and **Buy** shakes its head: checkout isn't open.
 
@@ -47,7 +47,8 @@ npm run dev
 
 Then open <http://localhost:5173>. The first start downloads the engine.
 
-`npm run build` makes the static site in `dist/`. The engine's key is fetched with the ClassCAD
+`npm run build` makes the static site in `dist/`, and `npm run format` formats the code (Prettier).
+The engine's key is fetched with the ClassCAD
 public access token in `.env` (`VITE_CLASSCAD_TOKEN`). A `ccpk_` token is made to sit in a web
 page: it only yields keys on the account's registered domains (impeller.classcad.ai) and on
 localhost.
@@ -84,6 +85,10 @@ The price is the film's: CHF 24 + 0.95 per cm³ of the part + 14 for a coloured 
 
 ## How it is built
 
+- `src/main.jsx`, `src/App.jsx`: the start, and the page's layout. `src/Session.jsx` opens buerli's
+  CAD session and hands it to the engine.
+- `src/store.js`: what the page knows (a zustand store): how far the engine is, what the controls
+  want, what the model is as last built, and the cart.
 - `src/engine.js`: the CAD session. It loads the OFB and reads back what the engine built: the
   current solid's faces and edges, the volume, and the vane sketch's solved geometry. It also
   paces the changes. A click goes to the engine at once. A drag goes 70 ms after it starts, and
@@ -93,7 +98,10 @@ The price is the film's: CHF 24 + 0.95 per cm³ of the part + 14 for a coloured 
 - `src/three/`: the part in the film's look (`body.js` builds the geometry, edges and silhouette
   candidates from the engine's graphic; `Part.jsx` draws them; `View.jsx` is the turning view).
 - `src/ui/`: the page: `Hero` (with the giant readout of what is being changed), `Card` (the
-  configurator), `Stage` (the part, or its sketch), `Sketch`, `Cart`, `Nav`.
+  configurator), `Stage` (the part, or its sketch, and the loading drawing), `Sketch` (with
+  `placeReadout.js`, which keeps its readout clear of the handles), `Cart`, `Nav`.
 - `src/design.js`: the same design math as the model's expressions. The page uses it for what it
   must know before the engine answers: where the sketch's handles are while they are dragged,
   which configurations the controls allow, and the price.
+- `cad/impeller.js`: the script the model was built with (run it in the ClassCAD MCP, then save the
+  drawing as OFB).

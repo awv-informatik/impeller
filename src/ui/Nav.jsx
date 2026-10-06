@@ -1,3 +1,4 @@
+// The nav: the shop's name, its pages (one so far), the source, and the cart with its count.
 import { useEffect, useRef, useState } from 'react'
 import { useShop } from '../store'
 import { GitHub, REPO } from './GitHub'
@@ -24,12 +25,20 @@ export function Nav() {
         <span>impeller.parts</span>
       </a>
       <div className="links">
-        <a className="on" href="#configure">Configure</a>
+        <a className="on" href="#configure">
+          Configure
+        </a>
         <span title="Soon">Specs</span>
         <span title="Soon">Shipping</span>
         <span title="Soon">Contact</span>
       </div>
-      <a className="repo" href={REPO} target="_blank" rel="noreferrer" aria-label="The source on GitHub" title="The source on GitHub">
+      <a
+        className="repo"
+        href={REPO}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="The source on GitHub"
+        title="The source on GitHub">
         <GitHub />
       </a>
       <button className={'cart' + (hop ? ' hop' : '')} onClick={() => openCart(true)}>

@@ -1,3 +1,4 @@
+// The page starts: ClassCAD's WebAssembly client is set up, and the shop is drawn.
 import { createRoot } from 'react-dom/client'
 import { init, WASMClient } from '@buerli.io/classcad'
 import './fonts/fonts.css'

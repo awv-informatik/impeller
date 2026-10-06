@@ -29,10 +29,25 @@ export function View() {
   const body = useShop(s => s.body)
   const finish = useShop(s => s.finish)
   return (
-    <Canvas className="canvas" flat dpr={[1, 2]} gl={{ antialias: true, alpha: true }} camera={{ fov: 30, near: 10, far: 5000, position: [-175, 225, 320] }}>
+    <Canvas
+      className="canvas"
+      flat
+      dpr={[1, 2]}
+      gl={{ antialias: true, alpha: true }}
+      camera={{ fov: 30, near: 10, far: 5000, position: [-175, 225, 320] }}>
       <Part body={body} color={finishOf(finish).color} />
       <Rig />
-      <OrbitControls makeDefault autoRotate autoRotateSpeed={0.55} enableDamping dampingFactor={0.08} enablePan={false} enableZoom={false} minPolarAngle={0.25} maxPolarAngle={1.5} />
+      <OrbitControls
+        makeDefault
+        autoRotate
+        autoRotateSpeed={0.55}
+        enableDamping
+        dampingFactor={0.08}
+        enablePan={false}
+        enableZoom={false}
+        minPolarAngle={0.25}
+        maxPolarAngle={1.5}
+      />
     </Canvas>
   )
 }

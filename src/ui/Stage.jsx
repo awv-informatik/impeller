@@ -12,29 +12,36 @@ import { Sketch } from './Sketch'
 const STEPS = ['Starting ClassCAD', 'Loading impeller.ofb', 'Building the part']
 
 // a line of the drawing: when it starts to be drawn, and how long it is (it is drawn in along its length)
-const ln = (i, len) => ({ '--i': i, '--len': len.toFixed(2), strokeDasharray: `${len.toFixed(2)} ${len.toFixed(2)}` })
+const ln = (i, length) => {
+  const len = length.toFixed(2)
+  return { '--i': i, '--len': len, strokeDasharray: `${len} ${len}` }
+}
 
-// the shop's first part, from above, as its sketch draws it: the plate, the hub, the bore, the vanes
-// in red one after the other, the balance holes; over and over, turning slowly
+// The shop's first part from above, as its sketch draws it: the plate, the hub, the bore, the vanes in
+// red one after the other, the balance holes; over and over, turning slowly.
 function Drawing() {
-  const { d, vane, vlen, holes } = useMemo(() => {
+  const { d, vane, vaneLength, holes } = useMemo(() => {
     const d = design(BASE)
-    const f = v => v.toFixed(2)
-    const m = middle(d, 40)
-    const off = k => m.map(p => {
-      const dx = p[0] - d.C[0], dy = p[1] - d.C[1], l = Math.hypot(dx, dy)
-      return [p[0] + (dx / l) * k, p[1] + (dy / l) * k]
-    })
-    const loop = [...off(T / 2), ...off(-T / 2).reverse()]
-    const vane = 'M' + loop.map(p => p.map(f).join(' ')).join('L') + 'Z'
+    // the vane's outline: its middle line, half its thickness out to either side (from the arc's centre)
+    const line = middle(d, 40)
+    const side = k =>
+      line.map(([x, y]) => {
+        const l = Math.hypot(x - d.C[0], y - d.C[1])
+        return [x + ((x - d.C[0]) / l) * k, y + ((y - d.C[1]) / l) * k]
+      })
+    const loop = [...side(T / 2), ...side(-T / 2).reverse()]
+    const vane = 'M' + loop.map(p => p.map(v => v.toFixed(2)).join(' ')).join('L') + 'Z'
     // (its length, for drawing it in: the outline's, round)
-    let vlen = 0
-    for (let i = 0; i < loop.length; i++) vlen += Math.hypot(loop[(i + 1) % loop.length][0] - loop[i][0], loop[(i + 1) % loop.length][1] - loop[i][1])
+    let vaneLength = 0
+    loop.forEach((p, i) => {
+      const q = loop[(i + 1) % loop.length]
+      vaneLength += Math.hypot(q[0] - p[0], q[1] - p[1])
+    })
     const holes = Array.from({ length: BASE.vanes }, (_, k) => {
       const a = d.holeAng + k * d.pitch
       return [d.holeR * Math.cos(a), d.holeR * Math.sin(a)]
     })
-    return { d, vane, vlen, holes }
+    return { d, vane, vaneLength, holes }
   }, [])
   const R = BASE.diameter / 2
   return (
@@ -45,10 +52,23 @@ function Drawing() {
           <circle r={d.hub / 2} className="ln ink" style={ln(1.2, Math.PI * d.hub)} />
           <circle r={BASE.bore / 2} className="ln ink" style={ln(1.8, Math.PI * BASE.bore)} />
           {Array.from({ length: BASE.vanes }, (_, k) => (
-            <path key={k} d={vane} transform={`rotate(${(k * 360) / BASE.vanes})`} className="ln red" style={ln(2.6 + k * 0.42, vlen)} />
+            <path
+              key={k}
+              d={vane}
+              transform={`rotate(${(k * 360) / BASE.vanes})`}
+              className="ln red"
+              style={ln(2.6 + k * 0.42, vaneLength)}
+            />
           ))}
           {holes.map(([x, y], k) => (
-            <circle key={k} cx={x.toFixed(2)} cy={y.toFixed(2)} r="3.5" className="ln thin" style={ln(6.6 + k * 0.16, 7 * Math.PI)} />
+            <circle
+              key={k}
+              cx={x.toFixed(2)}
+              cy={y.toFixed(2)}
+              r="3.5"
+              className="ln thin"
+              style={ln(6.6 + k * 0.16, 7 * Math.PI)}
+            />
           ))}
         </g>
       </g>
@@ -68,7 +88,7 @@ function Loader() {
     return () => clearTimeout(t)
   }, [status])
   if (gone) return null
-  if (status === 'error')
+  if (status === 'error') {
     return (
       <div className="status err">
         <b>ClassCAD couldn't start</b>
@@ -76,6 +96,7 @@ function Loader() {
         <small>The engine's key is only issued on impeller.classcad.ai and on localhost.</small>
       </div>
     )
+  }
   const at = status === 'ready' ? STEPS.length : Math.max(0, STEPS.indexOf(note))
   return (
     <div className={'loader' + (status === 'ready' ? ' out' : '')}>

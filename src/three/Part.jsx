@@ -10,13 +10,15 @@ import { silhouette } from './body'
 
 const INK = '#0f1320'
 
-const vert = /* glsl */ `
+// The faces: their colour, half of it as an even light, half from the lamp (in view space, so it
+// stays over the viewer's shoulder as the part turns).
+const vertexShader = /* glsl */ `
 varying vec3 vNv;
 void main() {
   vNv = normalize(normalMatrix * normal);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`
-const frag = /* glsl */ `
+const fragmentShader = /* glsl */ `
 uniform vec3 uBase;
 varying vec3 vNv;
 void main() {
@@ -33,63 +35,84 @@ void main() {
 // than it is (its ends pulled toward the camera along their own rays: on screen nothing moves).
 function inkMaterial() {
   const m = new LineMaterial({ color: INK, linewidth: 1.6, transparent: true, depthWrite: false })
+  const end = 'vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );'
   m.onBeforeCompile = shader => {
-    shader.vertexShader = shader.vertexShader.replace('vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );', 'vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );\n\t\t\tstart.xyz *= 0.9975;\n\t\t\tend.xyz *= 0.9975;')
+    shader.vertexShader = shader.vertexShader.replace(end, `${end}\nstart.xyz *= 0.9975;\nend.xyz *= 0.9975;`)
   }
   m.customProgramCacheKey = () => 'ink'
   return m
 }
 
+// a set of inked lines, drawn after the faces
+function inkLines(material) {
+  const lines = new LineSegments2(new LineSegmentsGeometry(), material)
+  lines.frustumCulled = false
+  lines.renderOrder = 2
+  return lines
+}
+function setSegments(lines, segments) {
+  lines.geometry.dispose()
+  lines.geometry = new LineSegmentsGeometry()
+  lines.geometry.setPositions(segments.length ? segments : [0, 0, 0, 0, 0, 0])
+}
+
 export function Part({ body, color, width = 1.6 }) {
-  const { size, viewport, camera } = useThree()
-  const mat = useMemo(() => new THREE.ShaderMaterial({ uniforms: { uBase: { value: new THREE.Color(color) } }, vertexShader: vert, fragmentShader: frag, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1.5, polygonOffsetUnits: 2 }), [])
-  const lineMat = useMemo(() => inkMaterial(), [])
-  const edges = useMemo(() => { const l = new LineSegments2(new LineSegmentsGeometry(), lineMat); l.frustumCulled = false; l.renderOrder = 2; return l }, [lineMat])
-  const sil = useMemo(() => { const l = new LineSegments2(new LineSegmentsGeometry(), lineMat); l.frustumCulled = false; l.renderOrder = 2; return l }, [lineMat])
+  const { size, camera } = useThree()
+  const faces = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: { uBase: { value: new THREE.Color(color) } },
+        vertexShader,
+        fragmentShader,
+        side: THREE.DoubleSide,
+        // (the faces a little behind their edges and silhouettes)
+        polygonOffset: true,
+        polygonOffsetFactor: 1.5,
+        polygonOffsetUnits: 2,
+      }),
+    [],
+  )
+  const ink = useMemo(inkMaterial, [])
+  const edges = useMemo(() => inkLines(ink), [ink])
+  const outline = useMemo(() => inkLines(ink), [ink])
   const group = useRef()
-  const last = useRef({ eye: null, body: null })
+  const seen = useRef({ eye: null, body: null }) // (where the silhouette was last found from)
 
   // (the colour eases to the finish's)
   const target = useMemo(() => new THREE.Color(), [])
-  useEffect(() => { target.set(color) }, [color, target])
+  useEffect(() => void target.set(color), [color, target])
 
   useEffect(() => {
     if (!body) return
-    edges.geometry.dispose()
-    edges.geometry = new LineSegmentsGeometry()
-    edges.geometry.setPositions(body.edges.length ? body.edges : [0, 0, 0, 0, 0, 0])
-    last.current.body = null
+    setSegments(edges, body.edges)
+    seen.current.body = null
   }, [body, edges])
 
   useFrame((state, dt) => {
-    mat.uniforms.uBase.value.lerp(target, 1 - Math.exp(-dt * 10))
+    faces.uniforms.uBase.value.lerp(target, 1 - Math.exp(-dt * 10))
     const dpr = state.gl.getPixelRatio()
-    lineMat.resolution.set(size.width * dpr, size.height * dpr)
-    lineMat.linewidth = width * dpr
+    ink.resolution.set(size.width * dpr, size.height * dpr)
+    ink.linewidth = width * dpr
     if (!body || !group.current) return
-    // the silhouette, from where the eye is (in the part's own space)
-    const inv = group.current.matrixWorld.clone().invert()
-    const eye = camera.position.clone().applyMatrix4(inv)
-    const l = last.current
-    if (l.body === body && l.eye && l.eye.distanceToSquared(eye) < 1e-4) return
-    l.body = body
-    l.eye = eye
-    const s = silhouette(body, eye.toArray())
-    sil.geometry.dispose()
-    sil.geometry = new LineSegmentsGeometry()
-    sil.geometry.setPositions(s.length ? s : [0, 0, 0, 0, 0, 0])
-    sil.visible = s.length > 0
+    // the silhouette, from where the eye is (in the part's own space), when it has moved
+    const eye = camera.position.clone().applyMatrix4(group.current.matrixWorld.clone().invert())
+    const s = seen.current
+    if (s.body === body && s.eye && s.eye.distanceToSquared(eye) < 1e-4) return
+    Object.assign(s, { body, eye })
+    const segments = silhouette(body, eye.toArray())
+    setSegments(outline, segments)
+    outline.visible = segments.length > 0
   })
 
   if (!body) return null
+  // (the model's z is up, three.js's y: the part is stood up, its middle height at the room's middle)
   const zMid = (body.box.min.z + body.box.max.z) / 2
-  void viewport
   return (
     <group rotation={[-Math.PI / 2, 0, 0]}>
       <group ref={group} position={[0, 0, -zMid]}>
-        <mesh geometry={body.geometry} material={mat} />
+        <mesh geometry={body.geometry} material={faces} />
         <primitive object={edges} />
-        <primitive object={sil} />
+        <primitive object={outline} />
       </group>
     </group>
   )

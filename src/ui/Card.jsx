@@ -75,42 +75,63 @@ function Slider({ value, min, max, lo = min, step = 1, onChange, disabled, label
         else return
         e.preventDefault()
       }}>
-      {lo > min && <i className="lo" style={{ width: `${((lo - min) / (max - min)) * 100}%` }} title="Too small for these vanes and this curve" />}
+      {lo > min && (
+        <i
+          className="lo"
+          style={{ width: `${((lo - min) / (max - min)) * 100}%` }}
+          title="Too small for these vanes and this curve"
+        />
+      )}
       <i className="fill" style={{ width: `${k * 100}%` }} />
       <b className="knob" style={{ left: `${k * 100}%` }} />
     </div>
   )
 }
 
-// the vane curve, small: its middle line as bowed and swept
+// The vane curve, small, in the edit button: from the hub's end (bottom left) up toward the rim, as far
+// round as `wrap` takes it and bowed by `bow` (a quadratic curve through a control point).
+const ICON = [64, 30]
+const PAD = 4 // (room for the end dots)
+
 function MiniCurve({ wrap, bow }) {
   const w = (wrap * Math.PI) / 180
-  let A = [6, 25], B = [6 + 52 * Math.sin(w * 0.75), 25 - 22 * Math.sin(Math.min(w * 0.9, Math.PI / 2)) ** 0.5]
-  const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]
-  const nx = -(B[1] - A[1]), ny = B[0] - A[0], L = Math.hypot(nx, ny) || 1
-  let q = [M[0] + (nx / L) * bow * 2 * 34, M[1] + (ny / L) * bow * 2 * 34]
-  // (it stays inside its 64×30, dots and all: a curve bowed and swept far is drawn smaller, and moved
-  // in only as far as it has to be, so that it never jumps)
-  const on = t => [0, 1].map(i => (1 - t) ** 2 * A[i] + 2 * t * (1 - t) * q[i] + t * t * B[i])
-  const turns = [0, 1].map(i => (A[i] - q[i]) / (A[i] - 2 * q[i] + B[i])).filter(t => t > 0 && t < 1)
-  const pts = [A, B, ...turns.map(on)]
-  const lo = [0, 1].map(i => Math.min(...pts.map(p => p[i]))), hi = [0, 1].map(i => Math.max(...pts.map(p => p[i])))
-  const P = 4, box = [64, 30]
-  const s = Math.min(1, ...[0, 1].map(i => (box[i] - 2 * P) / (hi[i] - lo[i] || 1)))
-  const c = [0, 1].map(i => (lo[i] + hi[i]) / 2)
-  const shift = [0, 1].map(i => {
-    const a = c[i] + (lo[i] - c[i]) * s, b = c[i] + (hi[i] - c[i]) * s
-    return a < P ? P - a : b > box[i] - P ? box[i] - P - b : 0
-  })
-  const fit = p => [0, 1].map(i => c[i] + (p[i] - c[i]) * s + shift[i])
-  ;[A, B, q] = [fit(A), fit(B), fit(q)]
+  const A = [6, 25]
+  const B = [6 + 52 * Math.sin(w * 0.75), 25 - 22 * Math.sqrt(Math.sin(Math.min(w * 0.9, Math.PI / 2)))]
+  // (the control point: off the chord's middle, square to it, by the bow)
+  const n = [A[1] - B[1], B[0] - A[0]]
+  const L = Math.hypot(...n) || 1
+  const Q = [0, 1].map(i => (A[i] + B[i]) / 2 + (n[i] / L) * bow * 68)
+  const [a, b, q] = fitInIcon([A, B, Q])
+  const xy = p => p.map(v => v.toFixed(1)).join(' ')
   return (
-    <svg viewBox="0 0 64 30" width="64" height="30">
-      <path d={`M${A.map(v => v.toFixed(1)).join(' ')}Q${q.map(v => v.toFixed(1)).join(' ')} ${B.map(v => v.toFixed(1)).join(' ')}`} fill="none" stroke="#e7000b" strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx={A[0].toFixed(1)} cy={A[1].toFixed(1)} r="2.6" fill="#0f1320" />
-      <circle cx={B[0].toFixed(1)} cy={B[1].toFixed(1)} r="2.6" fill="#0f1320" />
+    <svg viewBox={`0 0 ${ICON.join(' ')}`} width={ICON[0]} height={ICON[1]}>
+      <path d={`M${xy(a)}Q${xy(q)} ${xy(b)}`} fill="none" stroke="#e7000b" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx={a[0].toFixed(1)} cy={a[1].toFixed(1)} r="2.6" fill="#0f1320" />
+      <circle cx={b[0].toFixed(1)} cy={b[1].toFixed(1)} r="2.6" fill="#0f1320" />
     </svg>
   )
+}
+
+// A curve bowed and swept far is drawn smaller, and moved in only as far as it sticks out of the icon
+// (so that it never jumps). [start, end, control] in, the same fitted out.
+function fitInIcon(pts) {
+  const [A, B, Q] = pts
+  // the curve's extent: its ends, and where it turns back in x or in y
+  const at = t => A.map((a, i) => (1 - t) ** 2 * a + 2 * t * (1 - t) * Q[i] + t * t * B[i])
+  const turns = [0, 1].map(i => (A[i] - Q[i]) / (A[i] - 2 * Q[i] + B[i])).filter(t => t > 0 && t < 1)
+  const extent = [A, B, ...turns.map(at)]
+  const axes = [0, 1].map(i => {
+    const lo = Math.min(...extent.map(p => p[i]))
+    const hi = Math.max(...extent.map(p => p[i]))
+    return { lo, hi, mid: (lo + hi) / 2 }
+  })
+  const scale = Math.min(1, ...axes.map(({ lo, hi }, i) => (ICON[i] - 2 * PAD) / (hi - lo || 1)))
+  const shift = axes.map(({ lo, hi, mid }, i) => {
+    const from = mid + (lo - mid) * scale
+    const to = mid + (hi - mid) * scale
+    return from < PAD ? PAD - from : to > ICON[i] - PAD ? ICON[i] - PAD - to : 0
+  })
+  return pts.map(p => p.map((v, i) => axes[i].mid + (v - axes[i].mid) * scale + shift[i]))
 }
 
 function Order() {
@@ -124,7 +145,13 @@ function Order() {
     const add = () => {
       const s = useShop.getState()
       if (s.busy || PARAMS.some(k => s.want[k] !== s.solved?.[k]) || s.volume == null) return setTimeout(add, 120)
-      s.addToCart({ key: JSON.stringify([PARAMS.map(k => s.solved[k]), s.finish]), config: { ...s.solved }, finish: s.finish, volume: s.volume, price: priceOf(s.volume, s.finish) })
+      s.addToCart({
+        key: JSON.stringify([PARAMS.map(k => s.solved[k]), s.finish]),
+        config: { ...s.solved },
+        finish: s.finish,
+        volume: s.volume,
+        price: priceOf(s.volume, s.finish),
+      })
       setState('done')
       setTimeout(() => useShop.getState().openCart(true), 650)
       setTimeout(() => setState('idle'), 2000)
@@ -176,14 +203,44 @@ export function Card() {
         <i className={'live' + (busy ? ' busy' : '')} />
         <small>{!ready ? (status === 'error' ? 'offline' : 'starting') : busy ? 'rebuilding' : 'live'}</small>
       </div>
-      <Row k="diameter" name="Diameter" value={<><b>Ø {want.diameter}</b> mm</>} className="r-slider">
-        <Slider label="Diameter" value={want.diameter} min={RANGE.diameter[0]} max={RANGE.diameter[1]} lo={lo} disabled={!ready} building={busy && solved?.diameter !== want.diameter} onChange={(v, drag) => change('diameter', v, !drag)} />
+      <Row
+        k="diameter"
+        name="Diameter"
+        value={
+          <>
+            <b>Ø {want.diameter}</b> mm
+          </>
+        }
+        className="r-slider">
+        <Slider
+          label="Diameter"
+          value={want.diameter}
+          min={RANGE.diameter[0]}
+          max={RANGE.diameter[1]}
+          lo={lo}
+          disabled={!ready}
+          building={busy && solved?.diameter !== want.diameter}
+          onChange={(v, drag) => change('diameter', v, !drag)}
+        />
       </Row>
       <Row k="vanes" name="Vanes" value={<b>{want.vanes}</b>} className="r-vanes">
         <div className="stepper">
-          <button className="b" disabled={!ready || want.vanes <= RANGE.vanes[0]} onClick={() => change('vanes', want.vanes - 1)} aria-label="Fewer vanes">−</button>
+          <button
+            className="b"
+            disabled={!ready || want.vanes <= RANGE.vanes[0]}
+            onClick={() => change('vanes', want.vanes - 1)}
+            aria-label="Fewer vanes">
+            −
+          </button>
           <span className="num">{want.vanes}</span>
-          <button className="b" disabled={!ready || want.vanes >= most} onClick={() => change('vanes', want.vanes + 1)} aria-label="More vanes" title={want.vanes >= most ? 'As many as this diameter takes' : undefined}>+</button>
+          <button
+            className="b"
+            disabled={!ready || want.vanes >= most}
+            onClick={() => change('vanes', want.vanes + 1)}
+            aria-label="More vanes"
+            title={want.vanes >= most ? 'As many as this diameter takes' : undefined}>
+            +
+          </button>
         </div>
         <div className="dots">
           {Array.from({ length: RANGE.vanes[1] }, (_, i) => (
@@ -191,28 +248,80 @@ export function Card() {
           ))}
         </div>
       </Row>
-      <Row k="vaneHeight" name="Vane height" value={<><b>{want.vaneHeight}</b> mm</>} className="r-slider">
-        <Slider label="Vane height" value={want.vaneHeight} min={RANGE.vaneHeight[0]} max={RANGE.vaneHeight[1]} disabled={!ready} building={busy && solved?.vaneHeight !== want.vaneHeight} onChange={(v, drag) => change('vaneHeight', v, !drag)} />
+      <Row
+        k="vaneHeight"
+        name="Vane height"
+        value={
+          <>
+            <b>{want.vaneHeight}</b> mm
+          </>
+        }
+        className="r-slider">
+        <Slider
+          label="Vane height"
+          value={want.vaneHeight}
+          min={RANGE.vaneHeight[0]}
+          max={RANGE.vaneHeight[1]}
+          disabled={!ready}
+          building={busy && solved?.vaneHeight !== want.vaneHeight}
+          onChange={(v, drag) => change('vaneHeight', v, !drag)}
+        />
       </Row>
-      <Row k="bore" name="Bore" value={<><b>Ø {want.bore}</b> mm</>} className="r-bore">
+      <Row
+        k="bore"
+        name="Bore"
+        value={
+          <>
+            <b>Ø {want.bore}</b> mm
+          </>
+        }
+        className="r-bore">
         <div className="chips">
           {BORES.map(b => (
-            <button key={b} className={'chip' + (b === want.bore ? ' on' : '')} disabled={!ready || !sound({ ...want, bore: b })} onClick={() => change('bore', b)}>
+            <button
+              key={b}
+              className={'chip' + (b === want.bore ? ' on' : '')}
+              disabled={!ready || !sound({ ...want, bore: b })}
+              onClick={() => change('bore', b)}>
               {b}
             </button>
           ))}
         </div>
       </Row>
-      <Row k="wrap" name="Vane curve" value={<><b>{Math.round(want.wrap)}°</b> sweep</>} className="r-curve">
-        <button className={'edit' + (sketchOpen ? ' on' : '')} disabled={!ready} onClick={() => useShop.getState().openSketch(!sketchOpen)}>
+      <Row
+        k="wrap"
+        name="Vane curve"
+        value={
+          <>
+            <b>{Math.round(want.wrap)}°</b> sweep
+          </>
+        }
+        className="r-curve">
+        <button
+          className={'edit' + (sketchOpen ? ' on' : '')}
+          disabled={!ready}
+          onClick={() => useShop.getState().openSketch(!sketchOpen)}>
           <MiniCurve wrap={want.wrap} bow={want.bow} />
           <span>{sketchOpen ? 'Back to the part' : 'Edit the sketch'}</span>
         </button>
       </Row>
-      <Row k="finish" name="Finish" value={<><b>{f.label}</b> anodized</>} className="r-finish">
+      <Row
+        k="finish"
+        name="Finish"
+        value={
+          <>
+            <b>{f.label}</b> anodized
+          </>
+        }
+        className="r-finish">
         <div className="swatches">
           {FINISHES.map(x => (
-            <button key={x.key} className={'sw' + (x.key === finish ? ' on' : '')} onClick={() => useShop.getState().setFinish(x.key)} aria-label={x.word} title={x.word}>
+            <button
+              key={x.key}
+              className={'sw' + (x.key === finish ? ' on' : '')}
+              onClick={() => useShop.getState().setFinish(x.key)}
+              aria-label={x.word}
+              title={x.word}>
               <i style={{ background: x.swatch }} />
             </button>
           ))}

@@ -1,7 +1,7 @@
 // The model, in the page: ClassCAD runs here as WebAssembly (buerli.io), loads impeller.ofb, and every
-// change on the page is a change of the model's own parameters. The engine rebuilds the part, and
-// the page reads back what it built: the solid as it tessellated it, the vane sketch as it solved
-// it, and the volume the price is made of.
+// change on the page is a change of the model's own parameters. The engine rebuilds the part, and the
+// page reads back what it built: the solid as it tessellated it, the vane sketch as it solved it, and
+// the volume the price is made of.
 //
 // Changes are queued: while the engine rebuilds, only the latest wish waits; when it is done it goes
 // on with that one. So a slider can be dragged as fast as a hand likes.
@@ -17,19 +17,22 @@ import { makeBody } from './three/body'
 let session = null // { api, facade, drawingId, part }
 let generation = 0 // the session the engine's work belongs to
 let loaded = false // the model is in the session
+let recovering = false // a new session is being opened
 let built = null // the configuration the session's model has (the page shows the one it last read back)
 let running = false
-let next = null
-let final = false // the wish waiting is one a hand has let go of (or a click): the one to show
+let next = null // the latest wish, waiting
+let final = false // that wish is one a hand has let go of (or a click): the one to show
 
 const set = s => useShop.setState(s)
+
 // (how a dead session answers: it is not connected, its drawing is gone)
-const lost = e => /not connected|drawing id not set|connect\(\)|destroyed|reading 'api'|reading 'drawingId'/i.test(String(e?.message ?? e))
+const DEAD = /not connected|drawing id not set|connect\(\)|destroyed|reading 'api'|reading 'drawingId'/i
+const lost = e => DEAD.test(String(e?.message ?? e))
 
 // (while developing: a change here reloads the page)
 if (import.meta.hot) import.meta.hot.decline()
 
-// the session to work in: the model is loaded into it, and the latest wish built in it. (While the
+// The session to work in: the model is loaded into it, and the latest wish built in it. (While the
 // engine has a live session with the model in it, it keeps it.)
 export function attach(cadApi, cadFacade, drawingId) {
   if (!drawingId || session?.drawingId === drawingId) return
@@ -38,8 +41,7 @@ export function attach(cadApi, cadFacade, drawingId) {
   load(session)
 }
 
-// a dead session is replaced by one of the engine's own
-let recovering = false
+// A dead session is replaced by one of the engine's own.
 async function recover() {
   if (recovering) return
   recovering = true
@@ -95,11 +97,12 @@ async function load(s) {
     if (gen !== generation) return
     console.error(e)
     if (lost(e) && !recovering) return recover()
-    set(first ? { status: 'error', error: e?.message ?? String(e) } : { busy: false, error: `ClassCAD lost its session: ${e?.message ?? e}` })
+    if (first) set({ status: 'error', error: e?.message ?? String(e) })
+    else set({ busy: false, error: `ClassCAD lost its session: ${e?.message ?? e}` })
   }
 }
 
-// a wish: the controls' configuration. The engine catches up with the latest one. A click goes at
+// A wish: the controls' configuration. The engine catches up with the latest one. A click goes at
 // once (`now`); a drag waits a moment (QUICK ms from its first move, however many follow) so that a
 // slider swept across its track is a handful of rebuilds, not a hundred.
 const QUICK = 70
@@ -119,10 +122,9 @@ export function request(want, { now = false } = {}) {
     }, QUICK)
   }
 }
-const pause = ms => new Promise(r => setTimeout(r, ms))
 
-// a hand lets go: where it let go is final. A rebuild the engine is still busy with is out of date
-// by then, and is not shown; the final one is built at once, so the part changes once, to it
+// A hand lets go: where it let go is final. A rebuild the engine is still busy with is out of date by
+// then, and is not shown; the final one is built at once, so the part changes once, to it.
 export function release() {
   if (!next) return
   final = true
@@ -132,10 +134,13 @@ export function release() {
   run()
 }
 
+const pause = ms => new Promise(r => setTimeout(r, ms))
+
 async function run() {
   if (running || !loaded) return
   running = true
-  const s = session, gen = generation
+  const s = session
+  const gen = generation
   set({ busy: true })
   while (next && gen === generation) {
     const want = next
@@ -162,9 +167,11 @@ async function run() {
         recover()
         return
       }
-      // the engine would not build it. While the hand is still moving, the next wish is tried; once it
-      // has let go, the controls go back to what the engine last built
-      if (!next) set({ want: { ...useShop.getState().solved }, error: `ClassCAD couldn't build that one: ${e?.message ?? e}` })
+      // The engine would not build it. While the hand is still moving, the next wish is tried; once it
+      // has let go, the controls go back to what the engine last built.
+      if (!next) {
+        set({ want: { ...useShop.getState().solved }, error: `ClassCAD couldn't build that one: ${e?.message ?? e}` })
+      }
     }
     // (while a hand is still moving, a breath between rebuilds, for the latest wish to arrive)
     if (next) await pause(QUICK / 2)
@@ -175,14 +182,13 @@ async function run() {
   if (next && loaded && gen === generation) run()
 }
 
-// what the engine built: the current solid (its faces and edges), its volume, the vane sketch
+// What the engine built: the current solid (its faces and edges), its volume, the vane sketch.
 async function read(s, withSketch) {
   const tree = await s.facade.tree({ refresh: true })
-  const nodes = Object.values(tree)
-  const ids = new Set(nodes.filter(n => n.class === 'CC_Solid' && !n.members?.consumed?.value).flatMap(n => n.geometryIdList ?? []))
+  const solids = Object.values(tree).filter(n => n.class === 'CC_Solid' && !n.members?.consumed?.value)
+  const ids = new Set(solids.flatMap(n => n.geometryIdList ?? []))
   const graphic = await s.facade.graphic()
   const containers = (graphic?.containers ?? []).filter(c => ids.has(c.id))
-  if (import.meta.env.DEV) window.containers = containers
   const body = containers.length ? makeBody(containers) : null
   const mass = await s.api.part.calculateMassProperties({ id: s.part })
   const out = { body, volume: mass?.volume ?? null }
@@ -190,14 +196,14 @@ async function read(s, withSketch) {
   return out
 }
 
-// the vane sketch as the engine solved it: its two arcs, its two caps, the balance hole
+// The vane sketch as the engine solved it: its two arcs, its two caps, the balance hole. (They are
+// found by the names ClassCAD gave them when the model was built, in cad/impeller.js.)
 async function readSketch(s, tree) {
-  const nodes = Object.values(tree)
-  const sk = nodes.find(n => n.name === 'Vane sketch')
+  const sk = Object.values(tree).find(n => n.name === 'Vane sketch')
   if (!sk) return null
   const geo = await s.api.sketch.getGeometry({ id: sk.id })
   const name = id => tree[id]?.name
-  const pos = async id => s.api.sketch.getPositions({ id })
+  const pos = id => s.api.sketch.getPositions({ id })
   const xy = p => [p.x, p.y]
   const arcs = {}
   for (const id of geo.arcs ?? []) {
@@ -206,26 +212,26 @@ async function readSketch(s, tree) {
   }
   const lines = {}
   for (const id of geo.lines ?? []) {
-    const n = name(id)
-    if (n !== 'Line7' && n !== 'Line8') continue
+    if (name(id) !== 'Line7' && name(id) !== 'Line8') continue // (the rest are construction lines)
     const p = await pos(id)
-    lines[n] = { start: xy(p.startPos), end: xy(p.endPos) }
+    lines[name(id)] = { start: xy(p.startPos), end: xy(p.endPos) }
   }
   let hole = null
   for (const id of geo.circles ?? []) {
-    const pts = await s.api.sketch.getPoints({ id })
-    const p = await pos(pts.centerId)
-    hole = xy(p.pos)
+    const { centerId } = await s.api.sketch.getPoints({ id })
+    hole = xy((await pos(centerId)).pos)
   }
   return { outer: arcs.Arc, inner: arcs.Arc0, capA: lines.Line7, capB: lines.Line8, hole }
 }
+
 // (a sketch read is marked with the configuration it was solved for)
 const stamp = (sketch, solved) => sketch && { ...sketch, for: JSON.stringify(solved) }
 
-// the sketch is read when it is opened
+// The sketch is read when it is opened.
 export async function refreshSketch() {
   if (!loaded || running) return
-  const s = session, solved = useShop.getState().solved
+  const s = session
+  const solved = useShop.getState().solved
   try {
     const sketch = stamp(await readSketch(s, await s.facade.tree()), solved)
     if (!running && s === session && useShop.getState().solved === solved) set({ sketch })

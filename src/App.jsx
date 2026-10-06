@@ -1,7 +1,7 @@
-// impeller.parts: the shop from the film, for real. The page is the film's (the nav, the headline,
-// the part, the configurator, the footer); the part is the real model, rebuilt by ClassCAD in the
-// page at every change.
-import { useEffect, useState } from 'react'
+// impeller.parts: the shop from the film "Part to parcel.", for real. The page is the film's (the nav,
+// the headline, the part, the configurator, the footer); the part is the real model, rebuilt by
+// ClassCAD in the page at every change.
+import { useEffect } from 'react'
 import { Session } from './Session'
 import { useShop } from './store'
 import { Nav } from './ui/Nav'
@@ -13,17 +13,13 @@ import { GitHub, REPO } from './ui/GitHub'
 
 export function App() {
   const cartOpen = useShop(s => s.cartOpen)
-  // (while developing: window.resession() replaces the CAD session, as a hot reload can)
-  const [session, setSession] = useState(0)
-  useEffect(() => {
-    if (import.meta.env.DEV) window.resession = () => setSession(n => n + 1)
-  }, [])
+  // (no scrolling the page behind the open cart)
   useEffect(() => {
     document.body.style.overflow = cartOpen ? 'hidden' : ''
   }, [cartOpen])
   return (
     <div className="page">
-      <Session key={session} />
+      <Session />
       <Nav />
       <main className="main">
         <Hero />
