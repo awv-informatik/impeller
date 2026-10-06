@@ -73,7 +73,7 @@ function Loader() {
       <div className="status err">
         <b>ClassCAD couldn't start</b>
         <span>{error}</span>
-        <small>The engine's key is only issued on impeller.classcad.ch and on localhost.</small>
+        <small>The engine's key is only issued on impeller.classcad.ai and on localhost.</small>
       </div>
     )
   const at = status === 'ready' ? STEPS.length : Math.max(0, STEPS.indexOf(note))

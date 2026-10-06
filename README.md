@@ -49,8 +49,11 @@ Then open <http://localhost:5173>. The first start downloads the engine.
 
 `npm run build` makes the static site in `dist/`. The engine's key is fetched with the ClassCAD
 public access token in `.env` (`VITE_CLASSCAD_TOKEN`). A `ccpk_` token is made to sit in a web
-page: it only yields keys on the account's registered domains (impeller.classcad.ch) and on
+page: it only yields keys on the account's registered domains (impeller.classcad.ai) and on
 localhost.
+
+It is published at <https://impeller.classcad.ai>, on Firebase Hosting (project `awv-informatik`,
+site `impeller-classcad-ai`): `npm run deploy` builds it and puts it there.
 
 ## The model
 
