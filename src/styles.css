@@ -127,6 +127,8 @@ i.cube { width: 18px; height: 18px; flex: none; display: inline-block; backgroun
 .sketch .outline { fill: none; stroke: #0f1320; stroke-width: 1; opacity: 0.3; vector-effect: non-scaling-stroke; }
 .sketch .vane { fill: rgba(231, 0, 11, 0.05); stroke: #e7000b; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .sketch .vane.first { fill: rgba(231, 0, 11, 0.12); stroke-width: 2; }
+.sketch .vanes { transition: opacity 0.15s; }
+.sketch .vanes.waiting { opacity: 0.3; transition: opacity 0.3s 0.15s; }
 .sketch .hole { fill: #fff; stroke: #0f1320; stroke-width: 1.3; vector-effect: non-scaling-stroke; }
 .sketch .mid { fill: none; stroke: #e7000b; stroke-width: 3.2; stroke-linecap: round; vector-effect: non-scaling-stroke; transition: opacity 0.2s; }
 .sketch .mid.busy { opacity: 0.75; }

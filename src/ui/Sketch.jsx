@@ -76,6 +76,8 @@ export function Sketch() {
   // (while a handle is held, the balance holes are where the model's expressions will put them when it is
   // let go: the same math, in design.js)
   const underHand = drag || sketch?.for === 'held'
+  // (a hand that took a handle while the engine was busy: until the engine follows it, the vanes wait, dim)
+  const waiting = drag && sketch?.for !== 'held'
   const hole = underHand ? [d.holeR * Math.cos(d.holeAng), d.holeR * Math.sin(d.holeAng)] : fresh && sketch.hole
   const holes = hole ? Array.from({ length: solved.vanes }, (_, k) => rot(hole, (2 * Math.PI * k) / solved.vanes)) : []
   // the curve the vanes are drawn about, as wanted (it leads; the engine's vanes follow it)
@@ -183,7 +185,7 @@ export function Sketch() {
           <rect x={-R} y={-R} width={2 * R} height={2 * R} fill="url(#major)" mask="url(#paper)" />
           <g transform="scale(1,-1)">
             <path d={outline} className="outline" />
-            <g mask="url(#hub)">
+            <g mask="url(#hub)" className={'vanes' + (waiting ? ' waiting' : '')}>
               {vanes.map((p, i) => (
                 <path key={i} d={p} className={'vane' + (i === 0 ? ' first' : '')} />
               ))}

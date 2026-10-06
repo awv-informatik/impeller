@@ -71,6 +71,11 @@ A move takes a few dozen milliseconds, so the red vane under the hand is the ske
 solved it, live. buerli keeps its copy of the model's tree up to date with every answer, so reading
 the solved points back costs no extra calls.
 
+ClassCAD does one thing at a time, so the page keeps the sketch open for a moment after the hand
+lets go: a hand that grips again at once (as one does on a trackpad, to drag further) goes on in
+the open sketch. A hand that takes a handle while the part is being rebuilt is never turned away:
+only its latest move waits, and the sketch catches up as soon as ClassCAD is free.
+
 ClassCAD can also move sketch geometry directly (`sketch.moveGeometry`): it moves the points it is
 given and lets the solver settle the rest, which is what a sketcher uses for free dragging. In this
 sketch, though, a handle carries the arc's centre, the caps and the walls along with it, and the
