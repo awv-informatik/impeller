@@ -1,19 +1,20 @@
 // The vane sketch, seen down the part's axis: the part's outline in ink, the vanes in red as the
 // engine solved the sketch (and patterned it round), and the three handles of the curve they are
 // drawn about. The end handle sweeps the vane round the rim (the model's `wrap`), the middle one bows
-// it (its `bow`). Every move is a change of those two parameters; the engine re-solves the sketch.
+// it (its `bow`). A handle is dragged in the sketch itself: the engine re-solves the sketch at every
+// move, and rebuilds the part when it is let go (engine.js).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShop } from '../store'
-import { refreshSketch, release, request } from '../engine'
+import { dragSketch, dropSketch, grabSketch } from '../engine'
 import { RANGE, design, middle, sound } from '../design'
 import { placeReadout } from './placeReadout'
 
-// a handle's move: a change of the model's parameters, if the part would still be one to machine
+// a handle's move: the curve changed, if the part would still be one to machine
 function change(patch) {
   const want = { ...useShop.getState().want, ...patch }
   if (!sound(want)) return
   useShop.setState({ want, touch: { key: Object.keys(patch)[0], at: performance.now() } })
-  request(want)
+  dragSketch(patch)
 }
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
@@ -47,7 +48,6 @@ export function Sketch() {
   const readoutPlace = useRef(-1)
   const held = useRef(null) // (the handle in hand: a ref, as pointer moves can come before React renders)
   const [drag, setDrag] = useState(null)
-  useEffect(() => void refreshSketch(), [])
 
   // the sheet's extent: the part's, and a margin (it keeps still while a handle is held)
   const [R, setR] = useState(() => want.diameter / 2 + 18)
@@ -64,24 +64,20 @@ export function Sketch() {
     for (let i = 0; i < e.length; i += 6) p += `M${xy([e[i], e[i + 1]])}L${xy([e[i + 3], e[i + 4]])}`
     return p
   }, [body])
-  // the vanes and the balance holes, as the engine solved the sketch for what is built, patterned round
-  const fresh = sketch && solved && sketch.for === JSON.stringify(solved)
+  // the vanes and the balance holes, as the engine solved the sketch (for what is built, or under a hand),
+  // patterned round
+  const fresh = sketch && (sketch.for === 'held' || (solved && sketch.for === JSON.stringify(solved)))
   const vanes = useMemo(() => {
     if (!fresh || !sketch.outer || !sketch.inner) return []
     const loop = [...arcPts(sketch.outer), ...arcPts(sketch.inner)]
-    const pitch = (2 * Math.PI) / solved.vanes
-    return Array.from({ length: solved.vanes }, (_, k) =>
-      pathOf(
-        loop.map(p => rot(p, k * pitch)),
-        true,
-      ),
-    )
+    const turned = k => loop.map(p => rot(p, (2 * Math.PI * k) / solved.vanes))
+    return Array.from({ length: solved.vanes }, (_, k) => pathOf(turned(k), true))
   }, [sketch, solved, fresh])
-  const holes = useMemo(() => {
-    if (!fresh || !sketch.hole) return []
-    const pitch = (2 * Math.PI) / solved.vanes
-    return Array.from({ length: solved.vanes }, (_, k) => rot(sketch.hole, k * pitch))
-  }, [sketch, solved, fresh])
+  // (while a handle is held, the balance holes are where the model's expressions will put them when it is
+  // let go: the same math, in design.js)
+  const underHand = drag || sketch?.for === 'held'
+  const hole = underHand ? [d.holeR * Math.cos(d.holeAng), d.holeR * Math.sin(d.holeAng)] : fresh && sketch.hole
+  const holes = hole ? Array.from({ length: solved.vanes }, (_, k) => rot(hole, (2 * Math.PI * k) / solved.vanes)) : []
   // the curve the vanes are drawn about, as wanted (it leads; the engine's vanes follow it)
   const mid = pathOf(middle(d, 48))
 
@@ -109,7 +105,7 @@ export function Sketch() {
   const letGo = () => {
     held.current = null
     setDrag(null)
-    release()
+    dropSketch()
   }
   const grab = handle => ({
     onPointerDown: e => {
@@ -117,6 +113,7 @@ export function Sketch() {
       e.currentTarget.setPointerCapture(e.pointerId)
       held.current = handle
       setDrag(handle)
+      grabSketch()
     },
     onPointerMove: e => held.current === handle && move(handle, e),
     onPointerUp: letGo,

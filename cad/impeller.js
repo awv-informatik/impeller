@@ -2,7 +2,7 @@
 //
 // It runs as the body of an async function with `api` (ClassCAD's v1 API), as the ClassCAD MCP's
 // run_script tool runs scripts: run it there, then save the drawing as OFB (the MCP's save tool,
-// format OFB). The shop loads that file and only ever changes its expressions.
+// format OFB). The shop loads that file and changes its expressions, and drags its vane sketch.
 //
 // The model: a plate (a ring), a vane extruded from a sketch and patterned round, a hub (a ring),
 // the balance holes (a pin through the plate between two vanes, patterned round), the bore through
@@ -15,11 +15,28 @@
 //   wrap        how far round the vane sweeps from the hub to the rim (degrees)
 //   bow         how far the vane bows off its chord, of the chord's length
 //
-// The vane is drawn about its middle line: an arc from A (on the hub, R1 out on the x axis) to B (on
-// the rim, R2 out, `wrap` round), bowed by `bow`. The expressions compute that arc's centre C and the
-// angles its ends are seen at from C; in the sketch, every point of the vane is placed from C by a
-// length and an angle (OFFSET and ANGLEOX dimensions bound to those expressions), so the solver has
-// nothing left to choose and no other solution to fall into, however far a parameter jumps.
+// The vane sketch is drawn as a hand would hold it. The vane is drawn about its middle line: an arc
+// from A (on the hub, on the x axis) through P (its middle) to B (on the rim). How far round B stands
+// is one dimension, `Sweep` (the angle of O→B, bound to `wrap`). P stands on the perpendicular
+// bisector of the chord A–B, and the angle between the chord and A→P is the other, `Bow` (bound to
+// atan(2·bow): an arc whose middle stands `bow` chords off its chord is seen from its end at that
+// angle, so the vane keeps its curve, whatever its chord). The walls are concentric with the middle
+// line, between two caps square to it, as long as the vane is thick and centred on A and on B.
+//
+// The balance hole stands holeR out, half a pitch round from where the middle line crosses that
+// circle. That angle the expressions work out (the same math as src/design.js): a circle crosses a
+// circle twice, and a solver left to find the crossing may take the other one.
+//
+// So each of the sketch's two handles, B and P, is held by one dimension, and that is how the shop
+// drags them: it opens the sketch (part.openFeature: the features after it wait), and sets the
+// handle's dimension to where the hand is (sketch.updateDimension); the solver re-solves the sketch
+// and nothing else, in a few dozen milliseconds. On letting go it sets `wrap` and `bow` to match (the
+// balance holes follow them) and closes the sketch, and the part is rebuilt once. The dimension keeps
+// the number the hand gave it.
+//
+// (sketch.moveGeometry, the solver's own drag, moves the points it is given and settles everything
+// else by least squares. Here everything else, the arc's centre, the caps and the walls, moves with
+// the handle and holds it back: the handle would not follow the hand.)
 
 const PLATE = 6 // the plate's thickness (mm)
 const T = 3.6 // the vanes' thickness (mm)
@@ -27,32 +44,46 @@ const HOLE = 7 // the balance holes' diameter (mm)
 const FRAC = 0.25 // where the balance holes sit, of the way from the hub to the rim
 const BASE = { D: 120, N: 9, H: 32, B: 16, wrap: 62, bow: 0.1555 }
 
-// the same math the expressions do (see src/design.js), for the seed geometry the solver starts from
-function design({ D, N, B, wrap, bow }) {
-  const hub = Math.max(32, B + 16)
+// Where the sketch's points start (the solver puts them where its constraints want them): the same
+// math as src/design.js.
+function seed({ D, N, B: bore, wrap, bow }) {
+  const hub = Math.max(32, bore + 16)
   const R1 = hub / 2 - 3
   const R2 = D / 2 - 3
   const W = (wrap * Math.PI) / 180
-  const Bx = R2 * Math.cos(W)
-  const By = R2 * Math.sin(W)
-  const chord = Math.hypot(Bx - R1, By)
-  const psi = Math.acos((Bx - R1) / chord)
+  const B = [R2 * Math.cos(W), R2 * Math.sin(W), 0]
+  const chord = Math.hypot(B[0] - R1, B[1])
+  const psi = Math.acos((B[0] - R1) / chord)
   const theta = 4 * Math.atan(2 * bow)
   const RC = chord / (2 * Math.sin(theta / 2))
   const a0 = psi + Math.PI / 2 + theta / 2
-  const a1 = a0 - theta
   const am = psi + Math.PI / 2
   const C = [R1 - RC * Math.cos(a0), -RC * Math.sin(a0)]
-  const dC = Math.hypot(C[0], C[1])
-  const phiC = Math.acos(C[0] / dC) * Math.sign(C[1])
-  const holeR = hub / 2 + FRAC * (D / 2 - hub / 2)
-  const alpha = Math.acos((holeR * holeR + dC * dC - RC * RC) / (2 * holeR * dC))
-  const holeAng = phiC + alpha + Math.PI / N
   const on = (R, a) => [C[0] + R * Math.cos(a), C[1] + R * Math.sin(a), 0]
-  return { hub, R1, R2, RC, a0, a1, am, C, holeR, holeAng, on, Ro: RC + T / 2, Ri: RC - T / 2 }
+  const holeR = hub / 2 + FRAC * (D / 2 - hub / 2)
+  const dC = Math.hypot(C[0], C[1])
+  const cross = Math.atan2(C[1], C[0]) + Math.acos((holeR * holeR + dC * dC - RC * RC) / (2 * holeR * dC))
+  const round = a => [holeR * Math.cos(a), holeR * Math.sin(a), 0]
+  const a1 = a0 - theta
+  const Ro = RC + T / 2
+  const Ri = RC - T / 2
+  // the middle line's ends and middle, the walls' corners and middles, the hole
+  return {
+    hub,
+    A: [R1, 0, 0],
+    B,
+    P: on(RC, am),
+    Oa: on(Ro, a0),
+    Ia: on(Ri, a0),
+    Ob: on(Ro, a1),
+    Ib: on(Ri, a1),
+    Om: on(Ro, am),
+    Im: on(Ri, am),
+    H: round(cross + Math.PI / N),
+  }
 }
 
-const d = design(BASE)
+const s = seed(BASE)
 const P_ = api.v1.part
 const S = api.v1.sketch
 // (a call's result, or what went wrong)
@@ -94,22 +125,21 @@ ok(
       { name: 'R1', value: 'hub/2 - 3' },
       { name: 'R2', value: 'diameter/2 - 3' },
       { name: 'W', value: 'wrap*C:PI/180' },
+      { name: 'beta', value: 'atan(2*bow)' },
+      { name: 'halfThick', value: 'thick/2' },
+      { name: 'holeR', value: 'hub/2 + holeFrac*(diameter/2 - hub/2)' },
+      // (where the middle line crosses the hole's circle: from its centre C and radius RC)
       { name: 'Bx', value: 'R2*cos(W)' },
       { name: 'By', value: 'R2*sin(W)' },
       { name: 'chord', value: 'sqrt((Bx - R1)*(Bx - R1) + By*By)' },
       { name: 'psi', value: 'acos((Bx - R1)/chord)' },
-      { name: 'theta', value: '4*atan(2*bow)' },
+      { name: 'theta', value: '4*beta' },
       { name: 'RC', value: 'chord/(2*sin(theta/2))' },
-      { name: 'Ro', value: 'RC + thick/2' },
-      { name: 'Ri', value: 'RC - thick/2' },
       { name: 'a0', value: 'psi + C:PI/2 + theta/2' },
-      { name: 'a1', value: 'a0 - theta' },
-      { name: 'am', value: 'psi + C:PI/2' },
       { name: 'Cx', value: 'R1 - RC*cos(a0)' },
       { name: 'Cy', value: '0 - RC*sin(a0)' },
       { name: 'dC', value: 'sqrt(Cx*Cx + Cy*Cy)' },
       { name: 'phiC', value: 'acos(Cx/dC)*Cy/sqrt(Cy*Cy + 0.000000001)' },
-      { name: 'holeR', value: 'hub/2 + holeFrac*(diameter/2 - hub/2)' },
       { name: 'alpha', value: 'acos((holeR*holeR + dC*dC - RC*RC)/(2*holeR*dC))' },
       { name: 'holeAng', value: 'phiC + alpha + halfPitch' },
       { name: 'holeDepth', value: '4*plate' },
@@ -121,6 +151,13 @@ ok(
 
 const NO = { genFixation: false, genIncidence: false, genTangency: false, genVertAndHoriz: false }
 const pt = async g => ok(await S.getPoints({ id: g }), 'points of ' + g)
+// (names, for the shop to find them by: setObjectName answers null, so only its level is checked)
+const named = async pairs => {
+  for (const [g, name] of pairs) {
+    const r = await api.v1.common.setObjectName({ id: g, name })
+    if (r.maxLevel > 31) throw new Error('name ' + name + ': ' + JSON.stringify(r.messages))
+  }
+}
 
 // a ring: two circles about the origin, their diameters bound to expressions, extruded up
 const ring = async (name, r1, e1, r2, e2, H) => {
@@ -157,84 +194,126 @@ const plate = await ring('Plate', BASE.D / 2, 'diameter', BASE.B / 2, 'bore', 'p
 // ---- the vane, and the balance hole beside it
 const sk = ok(await S.create({ id, planeId: top, name: 'Vane sketch' }), 'vane sketch')
 const O = ok(await S.point({ id: sk, pos: [0, 0, 0], ...NO }), 'origin')
-const A = [d.R1, 0, 0]
-const lOA = ok(await S.line({ id: sk, startPos: [0, 0, 0], endPos: A, isConstruction: true, ...NO }), 'OA')
-const lCA = ok(await S.line({ id: sk, startPos: [...d.C, 0], endPos: A, isConstruction: true, ...NO }), 'CA')
-// from C: the four corners and the two arcs' middles
-const spokes = [
-  ['Ro', 'a0'],
-  ['Ri', 'a0'],
-  ['Ro', 'a1'],
-  ['Ri', 'a1'],
-  ['Ro', 'am'],
-  ['Ri', 'am'],
-]
-const sl = ok(
-  await S.line(
-    spokes.map(([r, a]) => ({ id: sk, startPos: [...d.C, 0], endPos: d.on(d[r], d[a]), isConstruction: true, ...NO })),
-  ),
-  'spokes',
+// the middle line: O→A, O→B, the chord A–B, A→P and B→P (construction), and the arc A–P–B
+const line = (a, b) => ({ id: sk, startPos: a, endPos: b, isConstruction: true, ...NO })
+const [toA, toB, chord, aToP, bToP] = ok(
+  await S.line([line([0, 0, 0], s.A), line([0, 0, 0], s.B), line(s.A, s.B), line(s.A, s.P), line(s.B, s.P)]),
+  'middle line',
 )
-const [Oa, Ia, Ob, Ib, Om, Im] = spokes.map(([r, a]) => d.on(d[r], d[a]))
-const [outer, inner] = ok(
-  await S.arcBy3Points([
-    { id: sk, startPos: Oa, midPos: Om, endPos: Ob, ...NO },
-    { id: sk, startPos: Ib, midPos: Im, endPos: Ia, ...NO },
-  ]),
-  'arcs',
+const middle = ok(
+  await S.arcBy3Points({ id: sk, startPos: s.A, midPos: s.P, endPos: s.B, isConstruction: true, ...NO }),
+  'middle arc',
+)
+// the walls: the caps (each hung from two half-lines out of A or B, on the line through the arc's
+// centre), and the two arcs between them
+const [aOut, aIn, bOut, bIn] = ok(
+  await S.line([line(s.A, s.Oa), line(s.A, s.Ia), line(s.B, s.Ob), line(s.B, s.Ib)]),
+  'half caps',
 )
 const [capA, capB] = ok(
   await S.line([
-    { id: sk, startPos: Ia, endPos: Oa, ...NO },
-    { id: sk, startPos: Ob, endPos: Ib, ...NO },
+    { id: sk, startPos: s.Ia, endPos: s.Oa, ...NO },
+    { id: sk, startPos: s.Ob, endPos: s.Ib, ...NO },
   ]),
   'caps',
 )
-// the balance hole: holeR out, half a pitch round from where the vane's middle line crosses that circle
-const H = [d.holeR * Math.cos(d.holeAng), d.holeR * Math.sin(d.holeAng), 0]
-const lOH = ok(await S.line({ id: sk, startPos: [0, 0, 0], endPos: H, isConstruction: true, ...NO }), 'OH')
-const hole = ok(await S.circle({ id: sk, centerPos: H, radius: HOLE / 2, ...NO }), 'hole')
-const [pOA, pCA, pOH, pHole, pOut, pIn, pCapA, pCapB] = await Promise.all(
-  [lOA, lCA, lOH, hole, outer, inner, capA, capB].map(pt),
+const [outer, inner] = ok(
+  await S.arcBy3Points([
+    { id: sk, startPos: s.Oa, midPos: s.Om, endPos: s.Ob, ...NO },
+    { id: sk, startPos: s.Ib, midPos: s.Im, endPos: s.Ia, ...NO },
+  ]),
+  'walls',
 )
-const ps = await Promise.all(sl.map(pt))
+// the balance hole: O→H, holeR long and holeAng round
+const toH = ok(await S.line(line([0, 0, 0], s.H)), 'hole line')
+const hole = ok(await S.circle({ id: sk, centerPos: s.H, radius: HOLE / 2, ...NO }), 'hole')
+await named([
+  [toA, 'To A'],
+  [toB, 'To B'],
+  [chord, 'Chord'],
+  [aToP, 'A to P'],
+  [bToP, 'B to P'],
+  [middle, 'Middle'],
+  [aOut, 'A out'],
+  [aIn, 'A in'],
+  [bOut, 'B out'],
+  [bIn, 'B in'],
+  [capA, 'Cap A'],
+  [capB, 'Cap B'],
+  [outer, 'Outer'],
+  [inner, 'Inner'],
+  [toH, 'To hole'],
+  [hole, 'Hole'],
+])
+
+const [pA, pB, pChord, pAP, pBP, pMid, pCapA, pCapB, pOut, pIn, pH, pHole] = await Promise.all(
+  [toA, toB, chord, aToP, bToP, middle, capA, capB, outer, inner, toH, hole].map(pt),
+)
+const [pAo, pAi, pBo, pBi] = await Promise.all([aOut, aIn, bOut, bIn].map(pt))
+const A = pA.endId
+const B = pB.endId
+const P = pAP.endId
+const C = pMid.centerId
 ok(
   await S.constraint(
     [
       { type: 'FIXATION', geomIds: [O] },
-      { type: 'COINCIDENT', geomIds: [pOA.startId, O] },
-      { type: 'HORIZONTAL', geomIds: [lOA] },
-      { type: 'COINCIDENT', geomIds: [pCA.endId, pOA.endId] },
-      ...ps.map(p => ({ type: 'COINCIDENT', geomIds: [p.startId, pCA.startId] })),
-      { type: 'COINCIDENT', geomIds: [pOut.startId, ps[0].endId] },
-      { type: 'COINCIDENT', geomIds: [pOut.endId, ps[2].endId] },
-      { type: 'COINCIDENT', geomIds: [ps[4].endId, outer] },
-      { type: 'COINCIDENT', geomIds: [pIn.startId, ps[3].endId] },
-      { type: 'COINCIDENT', geomIds: [pIn.endId, ps[1].endId] },
-      { type: 'COINCIDENT', geomIds: [ps[5].endId, inner] },
-      { type: 'COINCIDENT', geomIds: [pCapA.startId, ps[1].endId] },
-      { type: 'COINCIDENT', geomIds: [pCapA.endId, ps[0].endId] },
-      { type: 'COINCIDENT', geomIds: [pCapB.startId, ps[2].endId] },
-      { type: 'COINCIDENT', geomIds: [pCapB.endId, ps[3].endId] },
-      { type: 'COINCIDENT', geomIds: [pOH.startId, O] },
-      { type: 'COINCIDENT', geomIds: [pHole.centerId, pOH.endId] },
+      ...[pA, pB, pH].map(p => ({ type: 'COINCIDENT', geomIds: [p.startId, O] })),
+      { type: 'HORIZONTAL', geomIds: [toA] },
+      // the middle line: the chord, P on its bisector, the arc through A, P and B
+      { type: 'COINCIDENT', geomIds: [pChord.startId, A] },
+      { type: 'COINCIDENT', geomIds: [pChord.endId, B] },
+      { type: 'COINCIDENT', geomIds: [pAP.startId, A] },
+      { type: 'COINCIDENT', geomIds: [pBP.startId, B] },
+      { type: 'COINCIDENT', geomIds: [pBP.endId, P] },
+      { type: 'EQUAL_LENGTH', geomIds: [aToP, bToP] },
+      { type: 'COINCIDENT', geomIds: [pMid.startId, A] },
+      { type: 'COINCIDENT', geomIds: [pMid.endId, B] },
+      { type: 'COINCIDENT', geomIds: [P, middle] },
+      // the caps: half a thickness out of A (and of B) to either side, on the line through the arc's
+      // centre, and the cap from end to end
+      ...[pAo, pAi].map(p => ({ type: 'COINCIDENT', geomIds: [p.startId, A] })),
+      ...[pBo, pBi].map(p => ({ type: 'COINCIDENT', geomIds: [p.startId, B] })),
+      { type: 'COLINEAR', geomIds: [aIn, aOut] },
+      { type: 'COLINEAR', geomIds: [bIn, bOut] },
+      { type: 'COINCIDENT', geomIds: [C, aOut] },
+      { type: 'COINCIDENT', geomIds: [C, bOut] },
+      { type: 'COINCIDENT', geomIds: [pCapA.startId, pAi.endId] },
+      { type: 'COINCIDENT', geomIds: [pCapA.endId, pAo.endId] },
+      { type: 'COINCIDENT', geomIds: [pCapB.startId, pBo.endId] },
+      { type: 'COINCIDENT', geomIds: [pCapB.endId, pBi.endId] },
+      // the walls: from cap to cap, about the arc's centre
+      { type: 'COINCIDENT', geomIds: [pOut.startId, pCapA.endId] },
+      { type: 'COINCIDENT', geomIds: [pOut.endId, pCapB.startId] },
+      { type: 'COINCIDENT', geomIds: [pIn.startId, pCapB.endId] },
+      { type: 'COINCIDENT', geomIds: [pIn.endId, pCapA.startId] },
+      { type: 'CONCENTRIC', geomIds: [outer, middle] },
+      { type: 'CONCENTRIC', geomIds: [inner, middle] },
+      // the hole's centre at H
+      { type: 'COINCIDENT', geomIds: [pHole.centerId, pH.endId] },
     ].map(c => ({ id: sk, ...c })),
   ),
   'vane constraints',
 )
+// (an angle's dimension is placed inside the angle it measures: that is the angle it keeps)
+const inside = (at, a, b, r) => {
+  const u = [a[0] - at[0], a[1] - at[1]]
+  const v = [b[0] - at[0], b[1] - at[1]]
+  const lu = Math.hypot(...u)
+  const lv = Math.hypot(...v)
+  return [at[0] + r * (u[0] / lu + v[0] / lv), at[1] + r * (u[1] / lu + v[1] / lv), 0]
+}
 ok(
   await S.dimension(
     [
-      { name: 'R1', type: 'OFFSET', geomIds: [lOA], value: '@expr.R1' },
-      { name: 'RC', type: 'OFFSET', geomIds: [lCA], value: '@expr.RC' },
-      { name: 'a0', type: 'ANGLEOX', geomIds: [lCA], value: '@expr.a0' },
-      ...sl.flatMap((l, i) => [
-        { name: 'r' + i, type: 'OFFSET', geomIds: [l], value: '@expr.' + spokes[i][0] },
-        { name: 'a' + i, type: 'ANGLEOX', geomIds: [l], value: '@expr.' + spokes[i][1] },
-      ]),
-      { name: 'HoleR', type: 'OFFSET', geomIds: [lOH], value: '@expr.holeR' },
-      { name: 'HoleAng', type: 'ANGLEOX', geomIds: [lOH], value: '@expr.holeAng' },
-      { name: 'Hole', type: 'DIAMETER', geomIds: [hole], value: '@expr.holeD' },
+      { name: 'R1', type: 'OFFSET', geomIds: [toA], value: '@expr.R1' },
+      { name: 'R2', type: 'OFFSET', geomIds: [toB], value: '@expr.R2' },
+      { name: 'Sweep', type: 'ANGLEOX', geomIds: [toB], value: '@expr.W' },
+      { name: 'Bow', type: 'ANGLE', geomIds: [chord, aToP], value: '@expr.beta', dimPos: inside(s.A, s.B, s.P, 12) },
+      ...[aOut, aIn, bOut, bIn].map(g => ({ type: 'OFFSET', geomIds: [g], value: '@expr.halfThick' })),
+      { name: 'Hole out', type: 'OFFSET', geomIds: [toH], value: '@expr.holeR' },
+      { name: 'Hole round', type: 'ANGLEOX', geomIds: [toH], value: '@expr.holeAng' },
+      { name: 'Hole size', type: 'DIAMETER', geomIds: [hole], value: '@expr.holeD' },
     ].map(x => ({ id: sk, ...x })),
   ),
   'vane dimensions',
@@ -273,7 +352,7 @@ const pins = ok(
 )
 
 // ---- the hub; the bore, through all
-const hubF = await ring('Hub', d.hub / 2, 'hub', BASE.B / 2, 'bore', 'hubTop')
+const hubF = await ring('Hub', s.hub / 2, 'hub', BASE.B / 2, 'bore', 'hubTop')
 const sk5 = ok(await S.create({ id, planeId: top, name: 'Bore sketch' }), 'bore sketch')
 const bc = ok(await S.circle({ id: sk5, centerPos: [0, 0, 0], radius: BASE.B / 2, ...NO }), 'bore circle')
 ok(await S.constraint({ id: sk5, type: 'FIXATION', geomIds: [(await pt(bc)).centerId] }), 'bore fix')
@@ -287,5 +366,5 @@ const boreF = ok(
 const body = ok(await P_.boolean({ id, name: 'Body', type: 'UNION', target: plate, tools: [vanes, hubF] }), 'union')
 ok(await P_.boolean({ id, name: 'Impeller', type: 'SUBTRACTION', target: body, tools: [pins, boreF] }), 'subtraction')
 const mp = ok(await P_.calculateMassProperties({ id }), 'mass')
-// (129 933.9 mm³: the first film's part, as that film measured it)
+// (129 933.9 mm³, as the shop starts)
 return { id, volume: mp.volume }
